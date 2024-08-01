@@ -1,0 +1,1354 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsmath}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage[preprint]{jmlr2e}
+%\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{etoolbox}
+\usepackage{comment}
+\usepackage{subfig}
+
+\usepackage[table, dvipsnames]{xcolor}
+
+\newif\ifincludeproofs
+\includeproofstrue % Uncomment to include proofs
+%\includeproofsfalse % Comment to include proofs
+
+\ifincludeproofs
+  % If proofs are included, do nothing and use the standard proof environment
+  \renewenvironment{proof}[1]{\par\noindent{\bf #1 \ }}{\hfill\BlackBox\\[2mm]}
+\else
+  % If proofs are excluded, redefine the proof environment to do nothing
+%  \excludecomment{proof}
+	\renewenvironment{proof}[1]{\textit{Proofs not compiled.}}{}
+	\excludecomment{proof}
+\fi
+
+\newcommand{\subparspace}{\vspace{3mm} \\}
+\newcommand{\subparspacenonewline}{\vspace{3mm}}
+
+
+
+\newcommand{\eps}{\varepsilon}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\N}{\mathcal{N}}
+\newcommand{\T}{\mathcal{T}}
+\newcommand{\vb}{v_b}
+\newcommand{\vbeta}{v_\beta}
+\newcommand{\cov}{\textrm{Cov}}
+\newcommand{\bezero}{\beta^0}
+\newcommand{\lratio}{\Delta_{n, \beta, \bezero, b, b^0}}
+\newcommand{\diag}{\textrm{diag}}
+\newcommand{\Span}{\textrm{span}}
+\newcommand{\Pims}{\Pi_{MS}}
+\newcommand{\Pig}{\Pi_{G}}
+\newcommand{\Li}{\mathcal{L}}
+\newcommand{\postCov}{\Sigma_*}
+\newcommand{\bv}{\mathbf{v}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\cO}{\mathcal{O}}
+\newcommand{\co}{\mathcal{o}}
+
+\newcommand{\LX}{\tilde{X}}
+\newcommand{\LY}{\tilde{Y}}
+
+
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\definecolor{aorange}{HTML}{ff832b}
+\definecolor{ared}{HTML}{da1e28}
+\definecolor{agreen}{HTML}{24a148}
+%\definecolor{assumption}{HTML}{8a3ffc}
+\definecolor{assumption}{HTML}{000000}
+
+%\numberwithin{equation}{section}
+
+\title{Bayesian Regression with Confounding Variables}
+\begin{document}
+\maketitle
+\section{Introduction}
+Consider a (generalised) version of the structured equation model (SEM):
+\begin{align}
+	Y = f(X) + H \delta + \nu, \label{eq:general_SEM}\\
+	X = H\Gamma + E, \nonumber
+\end{align}
+where $X = (\mathbf{x}_1, \dots, \mathbf{x}_n )^T \in \R^{n \times p}$ is a matrix consisting of $n$ observations of $p$ observable features. We are interested in performing inference on the function $f : \R^p \rightarrow \R$ and the notation $f(X) \in \R^n$ represents the vector of $f$ applied to the rows of $X$, i.e. $f(X) := (f(\mathbf{x}_1), \dots, f(\mathbf{x}_n))^T $. The model allows for the presence of confounding variables, $H \in \R^{n \times q}$, which are unobserved and have an effect on both $X$ (via $\Gamma$) and $Y$ (via $\delta$). The matrix $E$ can be thought of as the `unconfounded' $X$, with $X = E$ if $\Gamma \equiv 0$, so that the confounders have no effect on $X$, or if $H \equiv 0$ so that there are no confounders. Throughout, we assume that $q$, the dimension of the confounding variables, is unknown.
+
+If one assumes that we are in the high-dimensional setting ($n < p$) and that $f$ is linear, so that $f(\mathbf{x}_i) = \mathbf{x}_i^T \beta$, for some sparse $\beta \in \R^p$ and $f(X) = X \beta$, this problem is well studied in the frequentist setting in \cite{CBM2020} and \cite{GCB22}. In \cite{CBM2020}, under a `dense confounding' assumption, their frequentist method for estimation of $\beta$ remarkably achieves the same $\ell_1-$estimation error, despite the confounding, as the usual lasso approach in the presence of no confounding. \cite{GCB22} demonstrate that an additional debiasing step gives efficient confidence intervals for performing uncertainty quantification on the elements of $\beta$.
+
+This particular model has not been studied in the Bayesian literature, though there has been work in related settings {\color{ared} [references, spatial deconfounding paper]}. 
+
+In this work, we approach the model \eqref{eq:general_SEM} from the Bayesian perspective. Inspired by the approach of \cite{CBM2020} and \cite{Chernozhukov2017}, we first rewrite the SEM as a perturbed linear model,
+\begin{equation}
+Y = f(X) + X b + \eps, \label{eq:nl_f_l_g}
+\end{equation}
+where the form of $b \in \R^p$ depends on $\Gamma$ and $\delta$.
+Our approach then consists of placing a prior distribution on both $f$ and $b$ --- considered a latent variable --- which gives us a posterior distribution over $(f, b)$. We then perform inference on $f$ by considering the marginal posterior distribution of $f$ (with $b$ integrated out). Many Bayesian approaches to dealing with latent variables exist but are typically slow, since integrating out $b$ is often non-trivial and must be achieved via a numerical step. In this work, however, a $p-$variate Gaussian prior distribution on $b$ allows one to work out an expression for the marginal posterior of $f$ analytically (without performing numerical integration of $b$). Note, however, that it will sometimes still require a numerical procedure to sample from (or approximate) the marginal posterior.
+
+We consider this approach in two settings. The first is a high-dimensional, sparse, linear function, $f(\mathbf{x}_i) = \mathbf{x}_i^T \beta$, as considered in \cite{CBM2020}. We show that under similar assumptions to them, the marginal posterior distribution of $f$ contracts to the truth at a rate equal (up to constants) to: $(i)$ that of the analagous Bayesian method (with the same prior on $f$, but no consideration of $b$) in the presence of no confounding, and; $(ii)$ the rate of $\ell_1-$estimation error achieved by the frequentist method presented in \cite{CBM2020}. Furthermore, we observe that certain choices of prior covariance matrix on $b$ lead to the same preprocessing transforms presented in \cite{CBM2020}, drawing a nice connection between the frequentist and Bayesian approaches.
+
+We also consider the case of a non-linear $f$, and place a Gaussian process prior distribution on the function. In this case the marginal posterior distribution of $f$ is a Gaussian process. We show that this marginal posterior distribution contracts to the truth in empirical $L_2-$norm at the same rate as the usual Gaussian process in the unconfounded setting. In this case, the only additional assumption required (compared to ordinary Gaussian process regression with no confounding) is the same `dense confounding' assumption presented in \cite{CBM2020}. We note that the connection between Bayesian Gaussian processes and frequentist kernel methods likely means that this also gives a frequentist method for nonparametric regression with linear confounding. We also discuss the case of a non-linear perturbation, replacing $Xb$ in \eqref{eq:nl_f_l_g} with a possibly non-linear function $g(X)$. This case, unlike the linear perturbation, does not clearly result from a non-linear effect of confounders on $(X, Y)$, so our theoretical results  here require assumptions on the true value of $g$. We discuss special cases where the assumptions are verified and provide some intuition for which kind of perturbations our method can deal with.
+
+The structure of this paper is as follows. In Section \ref{sect:methodology} we discuss the connection between the SEM \eqref{eq:general_SEM} and the perturbed model \eqref{eq:nl_f_l_g}. We discuss the form that the marginal posterior distribution of $f$ takes in both the linear and non-linear cases. We then consider the two settings separately, and discuss in each a choice of prior distribution on $f$, and how one performs inference on $f$ via the marginal posterior. In Section \ref{sect:theory} we present our theoretical results, and discuss in detail the assumptions we require for these. In Section \ref{sect:simulations} we present an extensive empirical study on both simulated and real data and show that in both the linear and non-linear settings the Bayesian deconfounding procedure offers excellent performance. In Section \ref{} we discuss the case of a non-linear perturbation, and present theoretical guarantees for the posterior in this case.
+
+{\bf Notation. } Throughout this work we will use the singular value decomposition of $X$, given by $X = UDV^T$, where $U \in \R^{n \times r}$ is a matrix with orthonormal columns given by $\{\mathbf{u}_1, \dots, \mathbf{u}_r\}$, $D = \diag(\sqrt{\lambda_1}, \dots, \sqrt{\lambda_r}) \in \R^{r \times r}$ and $V \in \R^{r \times p}$ is a matrix with orthonormal columns given by $\{\mathbf{v}_1, \dots, \mathbf{v}_r\}$, and where $r$ is the rank of $X$.
+
+
+\section{Methodology for Bayesian Deconfounding}\label{sect:methodology}
+Consider the confounded model given in \eqref{eq:general_SEM}. As in \cite{CBM2020}, we can assume without loss of generality that the covariance of the confounded variables is given by $\cov(H) = I_q$ (otherwise one can transform $H$ and $\delta$ appropriately). The matrix $\Gamma \in \R^{q \times p}$ describes the linear effect of the $q$ confounding variables $H$ on  the $p$ observed variables $X$. We assume that the columns of $E$ have covariance $\cov(E) = \Sigma_E$.
+
+We can rewrite the first part of the model, for some $b \in \R^p$, as
+\begin{equation}\label{eq:likelihood}
+Y = f(X) + H\delta + \nu = f(X) + Xb + \eps,	
+\end{equation}
+where $\eps = H\delta - Xb + \nu$. In particular, if we want $\cov(X, \eps) = 0$, then we must choose $b$ as
+\begin{align}
+b &= (\cov(X, H) \cov(H, H)^{-1} \cov(H, X) + \Sigma_E)^{-1}\cov(X, H) \delta	\nonumber \\
+&= (\Gamma^T\Gamma + \Sigma_E)^{-1} \Gamma^T \delta \label{eq:b_relation_confounding}
+\end{align}
+Thus, one can think of the SEM as a special case of the perturbed model with the additional relationship between the design matrix $X$ and perturbation $b$ determined by \eqref{eq:b_relation_confounding}.
+ The presence of the perturbation $b$ of course makes the problem more difficult than ordinary regression, and in some cases renders the problem unidentifiable. However, we will see that under the following `dense confounding' assumption, specific methods can recover $f$ despite the perturbation. Specifically, the `dense confounding' assumption is that
+\begin{equation}
+\lambda_{\min}(\Gamma) = \Omega(\sqrt{p}),	\label{ass:dense_confounding}
+\end{equation}
+which we will discuss in more detail later.
+
+ We now place a prior on $f$ given by $\Pi_f$ (which we do not specify for now, as we have not yet made any assumption on the form of $f$), and a $p-$variate Gaussian prior distribution on $b$, $\mathcal{N}_p(0, \Sigma)$, which we denote by $\Pi_b$. The marginal posterior mass assigned to the set $F \subset \textrm{support}(f)$, is given by
+$$
+\Pi(F \times \R^p | X, Y) = \frac{\int_{F \times \R^p} L(f, b | X, Y) d\Pi(f, b) }{\int L(f, b | X, Y) d\Pi(f, b)} = \frac{\int_F \int_{\R^p} L(f, b | X, Y) d\Pi_b(b) d\Pi_f(f) }{\int \int_{\R^p} L(f, b | Y) d\Pi_b(b) d\Pi_f(f)}.
+$$
+ The likelihood of this model can then be decomposed in the following way
+\begin{align*}
+ \Li (f, b | X, Y) &\propto \exp\left\{-\frac{1}{2}\|Y - f(X) - Xb\|_2^2\right\} \\
+	&\propto \underbrace{\exp\left\{-\frac{1}{2}\|Y - f(X) \|_2^2\right\}}_{=: \Li(f | X, Y)}\cdot \underbrace{\exp\left\{-\frac{1}{2}\|Xb\|_2^2 + \langle Y - f(X), Xb\rangle_2 \right\}}_{=: \Li(b | f, \, X, \, Y)}. 
+\end{align*}
+This allows us to write
+$$
+\Pi(F \times \R^p | X, Y) =\frac{\int_F \left[\int_{\R^p} L(b|f, X, Y) d\Pi_b(b) \right] L(f| X, Y)d\Pi_f(f) }{\int \left[\int_{\R^p} L(b|f, X, Y) d\Pi_b(b) \right]L(f| X, Y) d\Pi_f(f)},
+$$
+where the terms in square brackets can be computed analytically as 
+$$
+\int_{\R^p} L(b|f, X, Y) d\Pi_b(b) = \sqrt{\frac{|\postCov|}{|\Sigma|}} e^{\frac{1}{2}[Y - f(X)]^TX\postCov X[Y - f(X)]},
+$$
+for $\postCov = (X^TX + \Sigma^{-1})^{-1}$. Now, assuming one can decompose $$I - X\postCov X^T = L^TL,$$ which we will show can always be done for reasonable choices of $\Sigma$, we obtain
+\begin{align}
+	\Pi(F \times \R^p | X, Y) = \frac{\int_F e^{-\frac{1}{2}\|L(Y - f(X)\|_2^2} d\Pi_{f}(f) }{\int e^{-\frac{1}{2}\|L(Y - f(X)\|_2^2} d\Pi_f(f)}. \label{eq:marginal_posterior_form_general}
+\end{align} 
+Thus, we can see that the marginal posterior in this case corresponds to a modified version of the ordinary posterior in unconfounded regression, but where the terms inside the $\|\cdot\|_2$ norm are premultiplied by the matrix $L$. We will now discuss two different forms of $f$, and priors which are suitable for each case.
+%\subparspace
+%{\bf High-dimensional sparse linear regression.} 
+\subsection{High-dimensional sparse linear regression}
+Consider the case that $f(X)$ is of the form $X \beta$, the data is high-dimensional ($n < p$), and the signal is sparse --- that is, there exists some $s < p$ and $S \subset \{1, \dots, p\}$ with $|S| = s$ such that $\beta_i = 0$ for all $i \notin S$. Then the model is
+\begin{equation}
+Y = X (\beta + b) + \eps.	\label{eq:perturbed_lm}
+\end{equation}
+
+
+In the presence of no perturbation ($b = 0$), this problem is well studied in both the Bayesian setting \citep{CS-HV2015} and the frequentist setting \citep{Tibshirani1996}. The presence of the perturbation $b \neq 0$ makes the problem more complicated, and to our knowledge has only been studied in the frequentist setting \citep{CBM2020, Chernozhukov2017}. 
+In general, the perturbed linear model is not identifiable: one can only infer $\beta + b$ from \eqref{eq:perturbed_lm}, which itself is only possible in the high-dimensional setting under sparsity assumptions. We do not want to assume that $b$ is sparse, however \cite{CBM2020} show that with the dense confounding assumption \eqref{ass:dense_confounding}, it is possible to recover a sparse $\beta$ with their method, despite the confounding, at the $\ell_1-$estimation rate of the lasso in the presence of no confounding.
+
+ It is useful for discussion now, and drawing connections later, to briefly state the approach of \cite{CBM2020}. For some matrix $F \in \R^{n \times n}$, one simply applies $F$ to the data $(X, Y)$, and then performs the usual lasso algorithm on the transformed data:
+ \begin{align}
+ \bar{X} &= F X, \qquad \bar{Y} = FY, \nonumber \\
+\hat{\beta}  &= \argmin_{\beta \in \mathbb{R}^p} \left\{\frac{1}{n}\|\bar{Y} - \bar{X}\beta\|_2^2 + \lambda_1\|\beta\|_1  \right\}	\label{eq:CBM_est}.
+ \end{align}
+ For some excellent intuition on how and why $F$ should be chosen, the reader is directed to Section 3 of \cite{CBM2020}. We note here that some good choices of $F$ basically act to shrink the (larger) singular values of $X$, where the confounding presents itself most readily, resulting in a `deconfounded' matrix $\bar{X}$.
+ 
+  We note that the {\it lava} estimator proposed in \cite{Chernozhukov2017} for the model is a special case of \eqref{eq:CBM_est}, and is given as the solution to the problem
+  $$
+\hat{\beta}, \hat{b}  = \argmin_{\beta, b \in \mathbb{R}^p} \left\{\frac{1}{n}\|Y - X\beta - Xb\|_2^2 + \lambda_1\|\beta\|_1 + \lambda_2\|b\|_2  \right\}.
+  $$
+  One may recognise this as the mode of the Bayesian posterior distribution over $(\beta, b)$ for a prior given by $\Pi(\beta) \sim \bigotimes_{i=1}^p Lap(n\lambda_1)$ and $\Pi(b) \sim \mathcal{N}_p(0, \frac{1}{n\lambda_2}I_p)$, which is reminiscent of the Bayesian lasso. However, \cite{CS-HV2015} show that in (unperturbed) sparse linear regression, the full posterior distribution for the Bayesian lasso does not contract at the same rate as the posterior mode, which suggests that taking such a prior would not be optimal. To address this, we suggest investigating the prior given by $\Pims(\beta) \sim MS_p(\pi_p, \lambda)$ the model selection prior studied in \cite{CS-HV2015}, while retaining the Gaussian prior on $b$. The definition of the model selection prior is recalled now.
+  
+  \begin{definition}[Model Selection Prior]\label{model_selection_prior}
+ For $p\geq 1$, $\pi_p$ a probability distribution on $\{0, \dots, p\}$ and $\lambda > 0$, the \textit{model selection} prior on $\beta \in \R^p$, denoted $MS_p(\pi_p, \lambda)$, is defined in the following hierarchical manner:
+ 	\begin{enumerate}
+ 		\item The sparsity, $s$, is distributed according to $\pi_p$.
+ 		\item The active set, $S$, given $s$ is uniform on the ${p}\choose {s}$ subsets of $\{1,\dots,p\}$ of size $s$.
+ 		\item $\beta_i | S \overset{ind}{\sim} \begin{cases}
+ 			\text{Lap}(\lambda),& i \in S \\
+ 			\delta_0,& i \notin S
+ 		\end{cases},\quad$  for $\delta_0$ the Dirac mass at 0.
+ 	\end{enumerate}
+\end{definition}
+With the model selection prior defined, we can formally define a prior on $(\beta, b)$ as follows.
+\begin{definition}[Deconfounded model selection prior]\label{def:decon_model_selection_prior}
+	For $\pi_p$ a probability distribution on $\{0, \dots, p\}$, $\lambda > 0$ and $\Sigma \in \R^{p \times p}$ a positive definite covariance matrix, the deconfounded model selection prior is defined as the distribution on $(\beta, b)$ given by
+	\begin{align*}
+		\beta &\sim MS_p(\pi_p, \lambda) =: \Pims(\beta),\\
+		b &\sim \N_p(\mathbf{0}, \Sigma) =: \Pig(b),
+	\end{align*}
+	independently.
+\end{definition}
+
+With the Gaussian prior on $b$, and now with the prior on the function $f(X) = X\beta$  defined by a distribution on $\beta$ given by the model selection prior, we have that the marginal posterior distribution of $\beta$ is given, for a set $A \subset \R^p$, by
+\begin{align}
+	\Pi((\beta, b) \in A \times \R^p | X, Y) = \frac{\int_A e^{-\frac{1}{2}\|L(Y - X\beta)\|_2^2} d\Pims(\beta) }{\int e^{-\frac{1}{2}\|L(Y - X\beta)\|_2^2} d\Pims(\beta)}  = \frac{\int_A e^{-\frac{1}{2}\|\LY - \LX\beta\|_2^2} d\Pims(\beta) }{\int e^{-\frac{1}{2}\|\tilde{Y} - \LX\beta\|_2^2} d\Pims(\beta)}, \label{eq:marginal_posterior_form_linear}
+\end{align}
+where $\LX := L X$ and $\LY := L Y$.
+
+\cite{CS-HV2015} present a wealth of appealing results for the posterior resulting from the model selection prior in the case of no perturbation. Our idea is that since:
+\begin{itemize}
+	\item \cite{CBM2020} show that applying a transform to the data and then performing standard lasso regression is effective in the the presence of confounding. 
+	\item  Applying a Gaussian prior to $b$ results in the marginal posterior given by \eqref{eq:marginal_posterior_form_linear}, effectively applying a linear transform to the data before passing it into the likelihood. 
+	\item The model selection prior gives a posterior with appealing properties in the case of no perturbation.
+\end{itemize}
+ Then the Gaussian prior on $b$ and model selection prior on $\beta$ should likewise give us a marginal posterior distribution on $\beta$ which possesses the same appealing results as presented in \cite{CS-HV2015}, despite the confounding.
+
+We note that the complex nature of the model selection prior means there is no analytic expression for the marginal posterior distribution of $\beta$ given in \eqref{eq:marginal_posterior_form_linear}. In practice, one must use either: $(i)$ approximate posterior sampling (e.g. MCMC methods like a Gibbs sampler) or $(ii)$ a variational approximation to the posterior. We explore both approaches in our simulation studies.
+
+{\bf A special class of $\Sigma$.} We discuss here a special class of prior covariance matrices for the Gaussian distribution on $b$ which will draw a clear connection between this approach and that of \cite{CBM2020}.
+
+Recall that $X^TX$ can be written as $\sum_{k = 1}^r \lambda_k \mathbf{v}_k \mathbf{v}_k^T$, where $r$ is the column rank of $X$ and $\{\mathbf{v}_1, \dots, \mathbf{v}_r\}$ are orthonormal. Extend these vectors to a basis $\{\mathbf{v}_1, \dots,\mathbf{v}_r, \mathbf{v}_{r+1},\dots,  \mathbf{v}_p\}$ of $\R^p$ and consider the prior covariance given by $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T$ for some $\varphi_k > 0$.
+For this special choice of prior we can compute $L$ and $LX$ exactly. 
+\begin{lemma}\label{lem:L_and_LX}
+	Suppose that $X$ has SVD given by $UDV^T$, with $\{\mathbf{u}_1, \dots, \mathbf{u}_r\}$ and $\{\mathbf{v}_1, \dots, \mathbf{v}_r\}$ the (orthonormal) columns of $U$ and $V$ respectively and $D = \textrm{diag}(\sqrt{\lambda_1}, \dots, \sqrt{\lambda_r})$. For $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k\mathbf{v}_k^T$ and $\postCov  = (X^TX + \Sigma^{-1})^{-1}$, there exists $L$ such that $L^TL = I - X\postCov X^T$ given by
+	\begin{align*}
+L &= \sum_{k = 1}^r \frac{1}{\sqrt{1+\lambda_k \varphi_k}} \mathbf{u}_k \mathbf{u}_k^T + \sum_{k = r + 1}^p \mathbf{u}_k \mathbf{u}_k^T	,	\\
+LX &= \sum_{k = 1}^r \sqrt{\frac{\lambda_k}{1+\lambda_k\varphi_k}} \mathbf{u}_k \mathbf{v}_k^T = U\tilde{D}V^T.		
+	\end{align*}
+	
+\end{lemma}
+We observe that $L$ simply maps the singular values of $X$ as
+	$
+	\sqrt{\lambda_k} \mapsto \sqrt{\frac{\lambda_k}{1+\lambda_k \varphi_k}} =: \sqrt{\tilde{\lambda}_i}.
+	$
+This is precisely what the transforms $F$ given in \cite{CBM2020} do --- and
+in fact:
+\begin{itemize}
+\item The trim transform is obtained for the choice,
+$$
+\varphi_k = \begin{cases}
+ \left(\frac{\lambda_k}{\tau^2} - 1\right)/\lambda_k	 & \textrm{if } \lambda_k > \tau^2, \\
+ 0 & \textrm{if } \lambda_k \leq \tau^2,
+ \end{cases}
+$$
+for some $\tau > 0$.
+See the discussion below concerning the case where any $\varphi_k = 0$ and $\Sigma^{-1}$ does not exist.
+\item The lava transform of \cite{Chernozhukov2017} is obtained for the choice $\varphi_k = \frac{1}{n\lambda_2}$ (so that $\Sigma = \frac{1}{n\lambda_2} I_p$).
+\item The puffer transform is obtained for the choice $\varphi_k = (\lambda_k - 1)/\lambda_k$. This only provides a positive semidefinite covariance matrix if each $\lambda_k \geq 1$.
+\end{itemize}
+We note in the case that any of $\varphi_k = 0$, $\Sigma^{-1}$ does not exist. The above equations all hold replacing $\Sigma^{-1}$ with its Moore-Penrose inverse given by
+ $$
+ \Sigma^+ = \sum_{k = 1, \varphi_k \neq 0}^p \varphi_k^{-1} \mathbf{v}_k \mathbf{v}_k^T.
+ $$
+ Thus, the family of spectral transforms proposed in \cite{CBM2020} corresponds exactly to the family of Gaussian priors on $b$ where the covariance $\Sigma$ has eigenvectors corresponding to the singular columns of $X$.
+
+
+
+\subsection{Gaussian process regression}
+We now consider the case that $f$ may be nonparametric. A natural Bayesian approach to nonparametric regression is to place a Gaussian process, $\textrm{GP}(0, k)$ prior on the function, for some positive definite kernel $k$. Since we assume that the perturbation is still linear, we keep the Gaussian prior on $b$. The prior we use in this case is thus given in the following definition.
+\begin{definition}[Deconfounded Gaussian process prior]\label{def:decon_GP}
+For $k$ a positive definite kernel and $\Sigma \in \R^{p \times p}$ a positive definite covariance matrix, the deconfounded GP prior is defined as the distribution on $(f, b)$, given by
+	\begin{align*}
+		f &\sim GP(0, k) =: \Pi_{GP}(f),\\
+		b &\sim \N_p(\mathbf{0}, \Sigma) =: \Pi_b(b),
+	\end{align*}
+	independently.
+\end{definition}
+
+Writing now $\mathbf{y} = (Y_1, \dots, Y_n)^T$, $\mathbf{f} = (f(\mathbf{x}_1), \dots, \mathbf{x}_n)^T$, Equation \eqref{eq:marginal_posterior_form_general} tells us that the marginal posterior form is
+$$
+\Pi(F \times \R^p | Y) = \frac{\int_F e^{-\frac{1}{2}\|L(\mathbf{y} - \mathbf{f})\|_2^2} d\Pi_{GP}(f)}{\int e^{-\frac{1}{2}\|L(\mathbf{y} - \mathbf{f})\|_2^2} d\Pi_{GP}(f)}.
+$$
+This amounts once again to a transformation of the likelihood --- however the difficulty here is that while $L$ operates on $\mathbf{y}$ just as before, it now acts on $\mathbf{f}$ rather than on $X$. Thus, computing the marginal posterior is not as simple as supplying transformed data to the ordinary procedure. Nevertheless, it is still possible to compute the posterior analytically by writing the transformed likelihood as the model 
+$$
+L\mathbf{y} = L\mathbf{f} + \boldsymbol{\eps} \Leftrightarrow \mathbf{y} = \mathbf{f} + L^{-1}\boldsymbol{\eps}.,
+$$
+where $\cov(\boldsymbol{\eps}) = I_n$ and so $\cov(L^{-1}\boldsymbol{\eps}) = 
+%L^{-1}(L^{-1})^T = (L^T L)^{-1} = (I - X\Sigma_*X^T)^{-1} = 
+I_n + X\Sigma X^T $ (if $\Sigma = \sum_{k=1}^p \varphi_k \bv_k \bv_k^T$). Then we can write, for $\mathbf{f}_* = (f(\bx_1^*), \dots, f(\bx_m^*))$ representing $f$ at arbitrary points $\bx_1^*, \dots, \bx_m^*$ where we want to conduct inference
+$$
+\left[\begin{matrix}
+	\mathbf{y} \\ \mathbf{f_*}
+\end{matrix} \right]
+\sim \mathcal{N}_{n + m} \left( 
+\left[\begin{matrix}
+\mathbf{0} \\ \mathbf{0}	
+\end{matrix} \right]
+, 
+\left[\begin{matrix}
+K_{X, X} + I + X\Sigma X^T & K_{X, X_*} \\ 
+K_{X_*, X} & K_{X_*, X_*}
+\end{matrix} \right]
+ \right),
+$$
+from which one can derive the posterior distribution at these points
+$$
+\mathbf{f_*} | \mathbf{y} \sim \mathcal{N}_m \left(
+K_{X*, X}(K_{X, X} + I + X\Sigma X^T)^{-1} \mathbf{y}, K_{X_*, X_*} - K_{X*, X}(K_{X, X} + I + X\Sigma X^T)^{-1}K_{X, X_*}
+\right).
+$$
+The marginal posterior distribution of $f$ is then a Gaussian process with mean and covariance given by
+\begin{align}
+	\mu_p(\bx) &= \mathbf{k}_n(x)^T (K_{X, X} + I + X\Sigma X^T)^{-1}\mathbf{y}, \label{eq:gp_posterior_linear} \\
+	k_p(\bx, \bx') &= k(\bx, \bx') - \mathbf{k}_n(\bx)^T (K_{X, X} + I + X\Sigma X^T)^{-1} \mathbf{k}_n(\bx'), \nonumber
+\end{align}
+for $\mathbf{k}_n(x) = (k(\bx, \bx_1), \dots, k(\bx, \bx_n))^T$. 
+One {\it may} hope that this corresponds to the ordinary Gaussian process posterior if one uses a `transformed' kernel, but we do not believe this to be the case. This makes our theoretical results slightly trickier, but we will nonetheless be able to prove posterior contraction of the marginal posterior GP to the truth. We refer to the marginal posterior Gaussian process presented in Equation \eqref{eq:gp_posterior_linear} as the {\it deconfounded GP}.
+\subparspace
+{\bf Visualisation of the deconfounded GP.} It is quite helpful to look at a realisation of some simulated data and the fits of a GP and the corresponding deconfounded GP (both with the same kernel).
+We generate $X$ and $Y$ according to \eqref{eq:general_SEM}, with $\Gamma_{ij}, E_{ij}, H_{ij}, \delta_{i} \sim \mathcal{N}(0, 1),$ $n = 1000, \, p = 1$ and $q = 2$. We take as a true function $f_0(x) = |x|^{1/2}$ and for the GP fits we use a Mat\'ern-1/2 kernel which should be able to model the underlying function effectively. We fit: $(i)$ the usual GP to $X$ and $Y$, yielding the blue posterior presented in Figure \ref{fig:gp_lin_confounding}; and $(ii)$ the deconfounded GP posterior given by \eqref{eq:gp_posterior_linear} with $\Sigma = I_1 = 1$, yielding the red posterior. 
+
+In Figure \ref{fig:gp_lin_confounding} we observe one realisation of the data and the corresponding fits; the solid lines in red and blue represent the pointwise posterior means, and the shaded regions represent pointwise 95\% credible intervals. We see that the usual GP is being seriously thrown off by the perturbation induced by the confounding structure, and only seems to closely match the truth (the black line) when $x$ is close to 0 and the perturbation $Xb$ vanishes. We see that the deconfounded GP has a close fit to the true function throughout the support of $X$ --- even near the endpoints where the perturbation is large. More crucially for uncertainty quantification, the pointwise credible regions of the deconfounded GP always cover the true function, whereas the corresponding regions from the ordinary GP do not. We will present more detailed numerical results later on in Section \ref{sect:simulations}.
+
+If one ignores the GP fits, Figure \ref{fig:gp_lin_confounding} also shows us clearly how the linear confounding in the data has resulted in a linear perturbation, giving us some intuition for the connection between the models \eqref{eq:general_SEM} and \eqref{eq:nl_f_l_g}.
+
+\begin{figure}[!h]
+\centering
+  \includegraphics[width=0.8\linewidth]{../Figures/example_confounded_gp_regression.pdf}\\
+  \caption{A realisation of two GP fits when there is linear confounding present in the data. The solid black line represents the true underlying function, $f_0(x)$, while the solid red and blue lines represent the posterior means of the GPs. The shaded regions represent pointwise $95\%-$credible regions.}
+\label{fig:gp_lin_confounding}
+\end{figure}
+
+
+
+
+
+
+\section{Theoretical Results}\label{sect:theory}
+In this section we discuss contraction rates for the marginal posterior distributions which occur as the result of the deconfounding procedures discussed in Section \ref{sect:methodology}. Though the procedures proposed for the cases of high-dimensional sparse linear regression and Gaussian process regression both place a Gaussian prior on $b$, the assumptions on the models are understandably quite different in each case, and so we treat each case separately. The common assumption in both sets of results is the `dense confounding' assumption \eqref{ass:dense_confounding}.
+
+\subsection{High-dimensional sparse linear regression}
+Here we will prove that the posterior distribution on $\beta$ from our Bayesian deconfounding method contracts to the truth at the same $\ell_1-$rate as presented in \cite{CBM2020}. We will require the following assumptions on the prior, which are the same as those in \cite{CS-HV2015}, which cover these results in the presence of no confounding. First, we assume that $\lambda$, the scale parameter of the slab in the model selection prior on $\beta$, lies in the range
+\begin{equation}
+	\frac{\|X\|}{p} \leq \lambda \leq 2\bar{\lambda}, \qquad \bar{\lambda} = 2\|X\|\sqrt{\log p}. \label{prior_assum_lambda}
+\end{equation}
+Additionally, in order to obtain sufficiently sparse models, we require that $\pi_p$, the prior on the dimension of the model, satisfies for some constants $A_1, A_2, A_3, A_4 > 0$
+\begin{equation}
+	A_1 p^{-A_3}\pi_p(s-1) \leq \pi_p(s) \leq A_2p^{-A_4} \pi_p(s-1), \qquad s = 1,\dots, p. \label{prior_assum_pi_p}
+\end{equation}
+In addition to the above, we will require that the confounding is dense and that the prior on $b$ places enough mass in certain directions determined by the design via the matrix $\Sigma$; these conditions are stated more formally in the following result.
+
+\begin{theorem}\label{thm:recovery}
+		Consider the structured equation model \eqref{eq:general_SEM} with $f(X) = X\beta^0$ for a $\beta^0$ with active set $S_0$, and suppose that $\Gamma$ satisfies \eqref{ass:dense_confounding}. With a latent $b$ given by \eqref{eq:b_relation_confounding}, consider the prior defined in Definition \ref{def:decon_model_selection_prior}, and suppose that {\color{assumption} $\lambda$ satisfies \eqref{prior_assum_lambda} and $\pi_p$ satisfies \eqref{prior_assum_pi_p}}. Suppose further that $\Sigma$ satisfies {\color{assumption}$\|\Sigma^{-1} \postCov X^TX\| = o_p(\sqrt{p})$}. Suppose there exists $L$ such that $L^TL = I - X\postCov X^T$.
+%		 (which can be thought of as replacing (A2) and (A3) from \cite{CBM2020})
+		  Then for sufficiently large $M$
+\begin{align*}
+	\sup_{\beta^0} \Pi\left(\beta: \|LX(\beta - \beta^0)\|_2 > \frac{M}{\bar{\psi}_{LX}(S_0)} \frac{\sqrt{|S_0|\log p}}{\phi_{LX}(S_0)} | Y \right) &\xrightarrow{P_0} 0, \\
+		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_1 > \frac{M}{\bar{\psi}_{LX}(S_0)^2} \frac{|S_0|\sqrt{\log p}}{\|LX\|\phi_{LX}(S_0)^2} | Y \right) &\xrightarrow{P_0} 0, \\
+		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_2 > \frac{M}{\tilde{\psi}_{LX}(S_0)^2} \frac{\sqrt{|S_0|\log p}}{\|LX\|\phi_{LX}(S_0)} | Y \right) &\xrightarrow{P_0} 0.
+\end{align*}
+\end{theorem}
+The above result says that under $P_0$, where the data is generated according to \eqref{eq:general_SEM} with $f(X) = X\beta^0$, the posterior distribution places a vanishing amount of mass on neighbourhoods outside of the truth. While Theorem 1 in \cite{CBM2020} provides an $\ell_1-$estimation rate of their frequentist method for a single $\beta$, our result is  slightly stronger in the sense that it holds with the same constant over all $\beta^0$ satisfying the sparsity requirements. Combining the constants, the result says that the posterior puts nearly all of its mass in $\ell_1-$neighbourhoods of order $s_0 \sqrt{\log p}/\|LX\| \approx s_0 \sqrt{\log p}/\sqrt{n}$, which is the same as the $\ell_1-$estimation rate given in \cite{CBM2020}.
+
+In the proof of Theorem \ref{thm:recovery} one restricts to models which are no larger than a constant times the true sparsity, $|S_0|$. The following result shows that the posterior concentrates on such models.
+
+
+\begin{theorem}[Dimension]\label{thm:dimension}
+		Consider the structured equation model \eqref{eq:general_SEM} with $f(X) = X\beta^0$ for a $\beta^0$ with active set $S_0$, and suppose that $\Gamma$ satisfies \eqref{ass:dense_confounding}. With $b$ given by \eqref{eq:b_relation_confounding}, consider the prior defined in Definition \ref{def:decon_model_selection_prior}, and suppose that {\color{assumption} $\lambda$ satisfies \eqref{prior_assum_lambda} and $\pi_p$ satisfies \eqref{prior_assum_pi_p}}. Suppose further that $\Sigma$ satisfies {\color{assumption}$\|\Sigma^{-1} \postCov X^TX\| = o_p(\sqrt{p})$}. Suppose there exists $L$ such that $L^TL = I - X\postCov X^T$.
+Then for any $M > 2$
+$$
+	\sup_{\beta^0} \Pi\left(\beta: |S_\beta| > |S_0|\left(1 + \frac{M}{A_4}\left[1 + \frac{16}{\phi_{LX}(S_0)^2}\frac{\lambda}{\bar{\lambda}} \right]\right) | Y \right) \rightarrow 0.
+$$
+\end{theorem}
+
+\begin{remark}\label{rem:var_approx}
+	Theorems \ref{thm:recovery} and \ref{thm:dimension} hold with respect to the full posterior distribution. We remark here that similar results can be proven for the variational approximation to the posterior given in \cite{Ray_Szabo_2020}, which is much more computationally tractable for higher dimensions. We consider both the full posterior and the variational approximation in the simulations.
+\end{remark}
+\subparspacenonewline
+ {\bf Comparison of assumptions.}
+The resulting $\ell_1-$contraction rate for the posterior matches (up to constants) the $\ell_1-$estimation rate from the frequentist estimator presented in \cite{CBM2020}. The main remaining difference between the results is in the assumptions, but we will see in the following that they are not so different. 
+% Recalling from \cite{CBM2020}, the intuition is that $b$ should lie mostly in the first $q$ principal components of $X$. This gives the Bayesian a motivation for the prior derived from the trim transform: with $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T$, setting $\varphi_k = 0$ (or perhaps very small) for $k > q$ will achieve this goal. In practice $q$ is unknown, but the trim transform makes an effort to achieve this by setting $\varphi_k = 0$ for $k > \lfloor p/2\rfloor$.
+ Here we recall the three main assumptions required for Theorem 1 of \cite{CBM2020} to hold, and relate them to the assumptions we make for Theorems \ref{thm:recovery} and \ref{thm:dimension} above:
+\begin{enumerate}
+	\item {\bf (A1)} requires that $\lambda_{\min}(\Gamma) = \Omega(\sqrt{p})$. We assume this exactly as stated in \cite{CBM2020}.
+	\item {\bf (A2)} requires that $\lambda_{\max}(\tilde{X}) = O_p(\sqrt{p})$. In the case of a transform defined as mapping the singular values as $\sqrt{\lambda_k} \mapsto \sqrt{\lambda_k/(1+\lambda_k \varphi_k)}$, this condition reduces to $\max_{k}\left\{\frac{\lambda_k}{1+\lambda_k \varphi_k} \right\} = O_p(\sqrt{p})$. We do not assume {\bf (A2)}, but recall our additional condition that $\|\Sigma^{-1} \postCov  X^T X\|= o_p(\sqrt{p})$. For the special choice of $\Sigma = \sum_k \varphi_k \mathbf{v}_k \mathbf{v}_k^T$, this reduces to $\max_{\varphi_k \neq 0}\left\{\frac{\lambda_k}{1+\lambda_k \varphi_k} \right\} = o_p(\sqrt{p})$, a very similar condition.
+	\item {\bf (A3)} requires that $(\phi_{\tilde{\Sigma}}^*)^2  = \Omega_p(\lambda_{\min}(\Sigma_E))$, where this compatibility number is defined in \cite{CBM2020} as
+		$$
+		\phi_{\tilde{\Sigma}}^*(S_0) := \inf_{\|\alpha\|_1 \leq 5\|\alpha_{S_0}\|_1 } \frac{\sqrt{\alpha^T \tilde{\Sigma} \alpha}}{\frac{1}{\sqrt{s_0}}\|\alpha_{S_0}\|_1} = \inf_{\|\alpha\|_1 \leq 5\|\alpha_{S_0}\|_1 } \frac{\frac{1}{n}\sqrt{\alpha^T \tilde{X}^T \tilde{X} \alpha}}{\frac{1}{\sqrt{s_0}}\|\alpha_{S_0}\|_1}  = \inf_{\|\alpha\|_1 \leq 5\|\alpha_{S_0}\|_1 } \frac{\|\tilde{X}\alpha\|_2 \sqrt{s_0}}{\sqrt{n}\|\alpha_{S_0}\|_1}.
+		$$ 
+		In the denominator of our rates we have a compatibility number given by
+		$$
+		\phi_{LX}(S_0) := \inf_{ \| \beta_{S_0^c}\|_1 \leq7\|\beta_{S_0} \|_1} \frac{\|LX \beta\|_2 \sqrt{s_0}}{\|X\|\|\beta_{S_0}\|_1} \approx  \inf_{ \| \beta\|_1 \leq 8\|\beta_{S_0} \|_1} \frac{\|\tilde{X} \beta\|_2 \sqrt{s_0}}{\sqrt{n} \|\beta_{S_0}\|_1}.
+		$$
+		Thus, we can see that bounding our compatibility number $\phi_{LX}(S_0)$ away from zero is a very similar condition to {\bf (A3)}.
+\end{enumerate}
+
+Aside from the assumptions \eqref{prior_assum_lambda} and \eqref{prior_assum_pi_p} on the prior, which can always be satisfied for simple choices of $\lambda$ and $\pi_p$, we only require conditions which are extremely similar to {\bf (A1)} - {\bf (A3)} in \cite{CBM2020}.
+
+The remaining concern with Theorem \ref{thm:recovery} is the presence of the compatibility numbers of the matrix $LX$ in the denominator; we would like to bound these away from 0 so that the rates do not blow up. We have the following result which compares the compatibility numbers of $X$ and $LX$ when the sequence $\varphi_k \lambda_k$ is bounded.
+\begin{lemma}\label{lem:compatibility_relation}
+	Let $\Sigma$ be given by $\sum_{k = 1}^r \varphi_k \mathbf{v}_k \mathbf{v}_k^T$, and suppose that $L$ satisfies $L^TL = I - X\postCov X^T$. Suppose there exists some constant $C > 0$ such that $\varphi_k \lambda_k \leq C$ for each $k$. Then for any $S \subset [p]$
+	$$
+	\phi_{LX}(S) \geq \frac{1}{\sqrt{1+C}} \phi_X(S).
+	$$
+\end{lemma}
+Under such a regime, we do not need to concern ourselves with bounding the compatibility number of $LX$ from below if we are satisfied that it is true for the design matrix $X$. 
+
+\subsection{Gaussian process regression}
+We return now to the deconfounded Gaussian process prior for the model \eqref{eq:general_SEM} with a possibly nonparametric $f$. We recall that the marginal posterior distribution on $f$ is itself a Gaussian process with mean and covariance given by Equation \eqref{eq:gp_posterior_linear}. Much theory has been devoted to the contraction rate of the posterior resulting from a Gaussian process prior, to the point where verifying a simple condition on the concentration function gives a contraction rate for the resulting posterior.
+It would be convenient then if Equation \eqref{eq:gp_posterior_linear} was the posterior distribution for a Gaussian process prior with a certain kernel, but to us it does not appear to be so. For this reason we will have to construct our own tests with the transformed likelihood and make an assumption on the form of the perturbation.
+\subparspace
+{\textbf{Testing}. } Theorem 11.23 of \cite{FNBI} gives a simple condition on the concentration function of the GP prior in order for the posterior to contract to the truth in nonparametric normal regression. In fact, there are no assumptions on the model apart from the existence of tests $\phi$ satisfying, for constants $\xi, K > 0$, every $\eps > 0$ and every $f_1$ such that $d(f_1, f_0) > \eps$ for some metric $d$,
+\begin{equation*}
+	P_{f_0}^{(n)} \phi_n = e^{-Kn\eps^2}, \qquad \sup_{f : d(f, f_1) < \xi \eps} P_f^{(n)} (1-\phi) \leq e^{-Kn\eps^2}.
+\end{equation*}
+It turns out that under the dense confounding assumption \eqref{ass:dense_confounding} and an additional assumption on $L$, we can construct tests in our model with the property that.
+\begin{equation*}
+	P_{f_0}^{(n)} \phi_n = e^{-Kn\eps^2}, \qquad \sup_{f : \|f - f_1\|_{L,n,2} < \eps/2} P_{f}^{(n)} (1-\phi) \leq e^{-Kn\eps^2},
+\end{equation*}
+where the norm $\|\cdot\|_{L, n, 2}$ is defined as
+$
+\|f - f_1\|^2_{L,n,2} = \frac{1}{n}\|L(\mathbf{f} - \mathbf{f}_1)\|_2^2,
+$
+for $\mathbf{f} = (f(x_1), \dots, f(x_n))^T$.
+
+Then carefully adapting the proofs of Theorems 8.19, 8.20, 8.26, 11.20 and 11.23 in \cite{FNBI}, we have the following result.
+\begin{theorem}\label{thm:gp_contraction}
+	Let $P_0$ represent the model \eqref{eq:general_SEM} with $f = f_0$. Let $\Pi$ be the deconfounded GP prior on $(f, b)$ defined in Definition \ref{def:decon_GP}.
+Suppose that  $\Gamma$ satisfies \eqref{ass:dense_confounding} and the prior on $b$ satisfies $\lambda_{\max}(\LX) = \cO_p(\sqrt{p})$.  Finally, suppose that the GP component of the prior on $f$ satisfies that there exists $\eps_n >0$ such that
+	$$
+	\varphi_{f_0}(\eps_n) \leq n\eps_n^2. 
+	$$
+	Then the rate of contraction of the marginal posterior distribution of $f$ at $f_0$ relative to $\| \cdot\|_{L,n,2}$ is $\eps_n$. 
+	 \end{theorem}
+
+ The condition on the concentration function of the Gaussian process is standard. We also make the dense confounding assumption, and the condition  $\lambda_{\max}(\LX) = \cO_p(\sqrt{p})$ is just {\bf (A2)} of \cite{CBM2020}, which is verified for standard choices of $L$ (and the corresponding $\Sigma$ to achieve that transform).
+\subparspace
+{\bf Equivalence of norms.} We note that the contraction rate is in terms of the norm $\|\cdot\|_{L, n, 2}$, rather than the more typical $\|\cdot\|_{n, 2}$ norm. In the case of a prior given by $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T$ (for $X = UDV^T$), the matrix $L$ is given by 
+$$
+L^TL = \sum_{k=1}^p\frac{1}{1+\lambda_k \varphi_k}\mathbf{u}_k \mathbf{u}_k^T + \sum_{k = p+1}^n \mathbf{u}_k \mathbf{u}_k^T.$$ If $\lambda_k \varphi_k \leq C$
+for some $C > 0$, then the norms are equivalent:
+$$
+\frac{1}{\sqrt{1+C}} \|\cdot\|_{n ,2} \leq  \|\cdot\|_{L, n ,2} \leq \|\cdot\|_{n , 2}.
+$$ 
+Both lower and upper bounds are achieved. For instance, assuming $j^* = \operatorname{argmax}_j \lambda_j \varphi_j$ such that $\lambda_{j^*}\varphi_{j^*} = C,$ if $\mathbf{f} = \mathbf{u}_{j^*}$ then $\frac{1}{\sqrt{1+C}}\|f\|_{n, 2} = \|f\|_{L, n, 2}$. On the other hand, if $\mathbf{f} \in \textrm{span}(\mathbf{u}_{p+1}, \dots, \mathbf{u}_{n})$ then $\|f\|_{n, 2} = \|f\|_{L, n, 2}$.
+
+\section{Simulations}\label{sect:simulations}
+In this section we assess the performance of the Bayesian deconfounding procedures proposed in Section \ref{sect:methodology}. We consider the confounded high-dimensional linear regression setting first, before moving onto confounded Gaussian process regression. 
+\subsection{High-dimensional sparse linear regression}
+Throughout this section, we consider the marginal posterior distribution on $\beta$ which arises by placing the prior given by Definition \ref{def:decon_model_selection_prior} on $(\beta, b)$. For the model selection prior component of the prior, we consider the spike-and-slab distribution
+$$
+MS_p(\pi_p, \lambda) = \bigotimes_{i = 1}^p q_{inc} Lap(\lambda) + (1-q_{inc})\delta_0,
+$$
+for some probability of inclusion in the model, $q_{inc}$. This form of the model selection prior arises with the distribution $\pi_p(s) = \textrm{Binomial}(p, q_{inc})$, which satisfies \eqref{prior_assum_pi_p}.
+
+We begin by considering MCMC samples from the full posterior, comparing the performance of the posterior mean to the estimator proposed in \cite{CBM2020} and the mean from the Bayesian spike-and-slab posterior (with no consideration of $b$, and the prior on $\beta$ given as in the last display). Following this, we consider the mean-field variational approximation to the full posterior described in Remark \ref{rem:var_approx}, and compare this to the estimator from \cite{CBM2020} in a wider selection of scenarios. Where relevant, the transform (or prior on $b$) is denoted by $T$ for the trim transform or $L$ for the lava transform.
+%\subsubsection*{Full Posterior Example}
+\subparspace
+{\bf Full Posterior Example.}
+We begin by considering the full posterior for the {\bf B}ayesian {\bf D}econfounding method (denoted BD henceforth) and {\bf S}pike-{\bf a}nd-{\bf S}lab method (denoted SAS henceforth). Samples are drawn from these posterior distributions using a Gibbs sampler, and the estimate is taken as the mean of samples in the modal model class. For the estimator from \cite{CBM2020} (denoted CBM henceforth, for the initials of the authors) and the prior on $b$ in the BD method, we consider both the trim and lava transforms given in \cite{CBM2020} and \cite{Chernozhukov2017}.
+
+ Table \ref{Tab:small_exp_mcmc} details the mean $\ell_2-$error, $\ell_1-$error, precision, recall, $F_1$ and fitting time for the five procedures over 100 realisations of simulated data in a scenario where $(n, p, s_0, q)$ are given by $(100, 200, 5, 3)$. In this scenario we take $X = H \Gamma + E$, with $H_{ij}, \Gamma_{ij}, E_{ij}, \sim \mathcal{N}(0, 1)$ independently. The signal size, $\beta_i^0$ for $i$ in the active set, and the size of each confounding effect, $\delta_i$, on the response is given by $\log n$. 
+ 
+ One can see that the Bayesian deconfounding methods have the best performance in terms of outright estimation, with the smallest $\ell_2-$ and $\ell_1-$errors, while also demonstrating the highest precision and recall. Placing a prior on $b$ seems to have a positive influence on the posterior, with the performance of the BD procedure being dramatically better than the SAS, which places the same prior on $\beta$ but makes no attempt to correct for the confounding. The CBM methods understandably do much better than the SAS in terms of estimation, however they seem to be making many more false discoveries --- as evidenced by their lower precision. 
+  
+We remark briefly on the choice of prior/transform. In this instance, the methods which use the trim transform seem to perform slightly better in terms of estimation, but worse in terms of model selection. We can see that the main factor which influences the performance is the wider class of method (CBM or BD or SAS).
+ 
+ The main drawback of the BD method in this experiment is the dramatically longer fitting time which is a result of the Gibbs sampling procedure. Even in these relatively small dimensions, sampling a MCMC chain from the posterior of length 10,000 takes over a minute, which suggests that using this method in higher dimensions will be infeasible. As a result of this, in the remainder of the simulations where we explore higher dimensional settings we will approximate the posterior via Variational Bayes (VB) with a mean-field variational class, as studied in \cite{Ray_Szabo_2020}.
+   
+%  Figure \ref{fig:coordinate_errors} displays three samples (one in each row) of coordinate-wise errors in the estimates provided by the CBM, BD and SAS methods for the active coordinates (left, $\beta_i \neq 0$) and the inactive coordinates (right, $\beta_i = 0$). This helps to understand the results presented in Table \ref{Tab:small_exp_mcmc}. We can see that the Bayesian deconfounding method has small errors in the active set, and makes close to 0 false discoveries (all points displayed on the right hand side of the plot are false discoveries).  The SAS makes less false discoveries than the CBM method, but where it does make false discoveries the estimate is far from 0. The CBM method makes more false discoveries, however these are often close to 0 so that the $\ell_2-$ and $\ell_1-$errors are not as pronounced.
+
+
+\begin{table}[h]
+%\hspace{-10mm}
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{r|cc|cc|cc|c|c}
+\toprule
+Method & \multicolumn{2}{c}{CBM} & \multicolumn{2}{c}{BD} & SAS\\ \hline
+      Transform         & Trim             & Lava             & Trim            & Lava            &          \\\hline
+$\ell_2-$error & 0.637 $\pm$ 0.138 & 0.648 $\pm$ 0.120 & \textbf{0.256 $\pm$ 0.091} & 0.296 $\pm$ 0.075 & 0.817 $\pm$ 0.501           \\
+$\ell_1-$error & 2.082 $\pm$ 0.842 & 1.949 $\pm$ 0.712 & \textbf{0.483 $\pm$ 0.160} & 0.565 $\pm$ 0.230 & 3.139 $\pm$ 1.223           \\\hline
+Precision      & 0.291 $\pm$ 0.082 & 0.338 $\pm$ 0.088 & 0.995 $\pm$ 0.014 & \textbf{1.000 $\pm$ 0.000} & 0.758 $\pm$ 0.170           \\
+Recall         & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}           \\
+$F_1$          & 0.216 $\pm$ 0.082 & 0.243 $\pm$ 0.085 & 0.499 $\pm$ 0.004 & \textbf{0.500 $\pm$ 0.000} & 0.431 $\pm$ 0.069           \\\hline
+Time  (s)      & \textbf{0.046 $\pm$ 0.004} & 0.053 $\pm$ 0.006 & 67.87 $\pm$ 5.201 & 67.79 $\pm$ 7.734 & 67.80 $\pm$ 10.45          \\
+\bottomrule
+\end{tabular}
+}
+\caption{Estimates of the relevant metrics over 100 realisations of the data described in the text. $(n, p, s_0, q) $ are given by $(100, 200, 5, 3)$.}
+\label{Tab:small_exp_mcmc}
+\end{table}
+\subparspacenonewline
+{\bf Higher Dimensional Settings. }
+We now venture into higher dimensional settings, and compare the performance of the CBM methods (denoted CBM-T and CBM-L for the trim and lava transforms respectively) against the variational approximation to the Bayesian deconfounding posterior (denoted now by VBD-T and VBD-L for the trim and lava transforms respectively, for {\bf V}ariational {\bf B}ayesian {\bf D}econfounding). We also compare these methods to the variational approximation to the SAS, denoted SAS-VB.
+Table \ref{Tab:large_experiments} displays the results for 4 different settings, where $(n, p, s_0, q, \rho) $ are given by $(i)$: $(100, 200, 5, 3, 0)$, $(ii): (200, 400, 10, 6, 0)$, $(iii): (200, 800, 20, 12, 0)$, $(iv): (400, 800, 20, 12, 0.5)$, where $\rho$ gives the pairwise feature correlation within the unconfounded design matrix, $E$ --- that is, $E_{i \cdot} \sim \N_p(0, \Sigma_\rho)$ --- and the other parameters have the same meaning.
+
+The observations across each scenario are consistent with the smaller example presented for the full posterior. We see that the VBD procedures have a smaller $\ell_2-$ and $\ell_1-$error than the CBM procedures in each scenario, as well as outstanding precision. The SAS-VB procedure makes no effort to account for the confounding and so understandably has a much higher error than the other two methods - but we include the results as they demonstrate that the Bayesian deconfounding procedure is fixing a problem that comes up when there is no attempt to account for the confounding. We conclude by remarking that the CBM procedure exhibits favourable computation time which is to be expected, but the VBD procedures take the same order of time to compute and seem to scale in a similar fashion.
+
+\begin{table}
+\resizebox{\textwidth}{!}{
+\begin{tabular}{r|l|cccc}\toprule &  & \multicolumn{4}{c}{\textbf{Scenario}} \\ \toprule
+\textbf{Metric}        & \textbf{Method}  & $(i)$                      & $(ii)$                     & $(iii)$                    & $(iv)$\\
+\midrule
+$\ell_2-$loss & CBM-T   & 0.631 $\pm$ 0.136          & 0.622 $\pm$ 0.100          & 1.016 $\pm$ 0.152          & 0.606 $\pm$ 0.063\\
+              & CBM-L   & 0.653 $\pm$ 0.140          & 0.644 $\pm$ 0.101          & 1.047 $\pm$ 0.158          & 0.632 $\pm$ 0.064\\ 
+              & VBD-T & \textbf{0.243 $\pm$ 0.094} & \textbf{0.245 $\pm$ 0.060} & \textbf{0.341 $\pm$ 0.056} & \textbf{0.238 $\pm$ 0.038}\\
+              & VBD-L & 0.256 $\pm$ 0.086          & 0.258 $\pm$ 0.062          & 0.376 $\pm$ 0.064          & 0.249 $\pm$ 0.039\\
+              & SAS-VB  & 0.817 $\pm$ 1.819          & 4.972 $\pm$ 6.315          & 26.19 $\pm$ 2.321          & 24.01 $\pm$ 4.295\\
+\hline
+$\ell_1-$loss & CBM-T   & 2.101 $\pm$ 0.864          & 2.699 $\pm$ 0.675          & 6.645 $\pm$ 1.242          & 3.634 $\pm$ 0.615\\
+              & CBM-L   & 1.984 $\pm$ 0.718          & 2.624 $\pm$ 0.628          & 6.935 $\pm$ 1.476          & 3.497 $\pm$ 0.541\\
+              & VBD-T & \textbf{0.453 $\pm$ 0.170} & \textbf{0.634 $\pm$ 0.159} & \textbf{1.236 $\pm$ 0.214} & \textbf{0.846 $\pm$ 0.139}\\
+              & VBD-L & 0.478 $\pm$ 0.160          & 0.673 $\pm$ 0.165          & 1.359 $\pm$ 0.245          & 0.889 $\pm$ 0.144\\
+              & SAS-VB  & 3.139 $\pm$ 13.66          & 49.12 $\pm$ 71.29          & 369.7 $\pm$ 45.89          & 389.0 $\pm$ 80.50\\
+\hline
+Precision     & CBM-T   & 0.289 $\pm$ 0.150          & 0.286 $\pm$ 0.109          & 0.220 $\pm$ 0.043          & 0.275 $\pm$ 0.067\\
+              & CBM-L   & 0.341 $\pm$ 0.162          & 0.325 $\pm$ 0.109          & 0.221 $\pm$ 0.054          & 0.321 $\pm$ 0.065\\
+              & VBD-T & 0.998 $\pm$ 0.017          & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & VBD-L & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & SAS-VB  & 0.758 $\pm$ 0.170          & 0.414 $\pm$ 0.308          & 0.047 $\pm$ 0.006          & 0.051 $\pm$ 0.005\\
+\hline
+Recall        & CBM-T   & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & CBM-L   & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & VBD-T & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & VBD-L & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000} & \textbf{1.000 $\pm$ 0.000}\\
+              & SAS-VB  & 0.996 $\pm$ 0.028          & 0.989 $\pm$ 0.031          & 0.896 $\pm$ 0.070          & 0.980 $\pm$ 0.033\\
+\hline
+$F_1$         & CBM-T   & 0.215 $\pm$ 0.082          & 0.217 $\pm$ 0.062          & 0.180 $\pm$ 0.028          & 0.214 $\pm$ 0.040\\
+              & CBM-L   & 0.244 $\pm$ 0.085          & 0.241 $\pm$ 0.061          & 0.180 $\pm$ 0.035          & 0.241 $\pm$ 0.037\\
+              & VBD-T & \textbf{0.500 $\pm$ 0.005} & \textbf{0.500 $\pm$ 0.000} & \textbf{0.500 $\pm$ 0.000} & \textbf{0.500 $\pm$ 0.000}\\
+              & VBD-L & \textbf{0.500 $\pm$ 0.000} & \textbf{0.500 $\pm$ 0.000} & \textbf{0.500 $\pm$ 0.000} & \textbf{0.500 $\pm$ 0.000}\\
+              & SAS-VB  & 0.425 $\pm$ 0.069          & 0.258 $\pm$ 0.165          & 0.045 $\pm$ 0.006          & 0.049 $\pm$ 0.005\\
+\hline
+Time (s)      & CBM-T   & \textbf{0.039 $\pm$ 0.004} & \textbf{0.112 $\pm$ 0.016} & \textbf{0.159 $\pm$ 0.023} & \textbf{0.483 $\pm$ 0.027}\\
+              & CBM-L   & 0.047 $\pm$ 0.006          & 0.160 $\pm$ 0.011          & 0.487 $\pm$ 0.027          & 0.832 $\pm$ 0.027\\
+              & VBD-T & 0.047 $\pm$ 0.016          & 0.125 $\pm$ 0.017          & 0.196 $\pm$ 0.012          & 0.525 $\pm$ 0.025\\
+              & VBD-L & 0.053 $\pm$ 0.012          & 0.175 $\pm$ 0.021          & 0.513 $\pm$ 0.025          & 0.881 $\pm$ 0.033\\
+              & SAS-VB  & 0.106 $\pm$ 0.037          & 0.603 $\pm$ 0.156          & 0.978 $\pm$ 0.393          & 1.012 $\pm$ 0.262\\
+\bottomrule
+\end{tabular}
+}
+\caption{Estimates of the metrics over 100 realisations of the data. $(n, p, s_0, q, \rho)$ are given by $(i)$: $(100, 200, 5, 3, 0)$, $(ii): (200, 400, 10, 6, 0)$, $(iii): (200, 800, 20, 12, 0)$, $(iv): (400, 800, 20, 12, 0.5)$.}\label{Tab:large_experiments}
+\end{table}
+
+%\subsubsection*{Uncertainty Quantification}
+\subparspacenonewline
+{\bf Uncertainty Quantification.}
+In addition to outright estimation and model selection, the Bayesian procedures give us a natural way to carry out uncertainty quantification via posterior credible sets. Here we investigate the accuracy of the credible sets from the various Bayesian methods we have discussed, including the full posterior from the Bayesian deconfounding procedure (denoted BD-G for the Gibbs sampler), the variational approximation (denoted VBD) and the SAS (denoted SAS-G and SAS-VB where a Gibbs sampler has been used and where a variational approximation has been used respectively). 
+
+To get a sense of what the posteriors look like, Figure \ref{fig:credible_interval_sample} displays the coordinate-wise credible intervals from the three methods from one realisation of data. The top panel represents inactive coordinates (the true value of $\beta_i^0$ is 0), while the bottom panel represents active coordinates (the true value of $\beta_i^0$ in this case is $\log n$). In the top panel, we see that both the BD-G and VBD methods produce tight credible intervals around 0 (in fact, oftentimes point masses), representing that they have high confidence that the coordinate is not active. The SAS method produces credible intervals which are much wider in comparison, and actually often do not contain the true value of 0. On the bottom panel, we see the credible intervals produced for the active coordinates. In this case the BD-G and VBD methods produce indistinguishable credible intervals by eye (in fact one will find that the VB method produces slightly shorter credible intervals), that reliably contain the truth. Again, the SAS method produces much wider credible intervals, that frequently do not contain the true value.
+
+Table \ref{Tab:UQ} compares the same metrics from the previous sections for the VBD, BD-G and SAS methods - however in this case we also compute the coverage and length of the $95\%-$credible sets produced by each of the methods. We report the coverage and length separately for the active (A) and inactive coordinates (I), since they exhibit quite different behaviour. 
+
+We see that all of the BD methods provide reliable uncertainty quantification in this setting, both for the active and inactive coordinates. For the active coordinates, the behaviour of the credible sets from the VBD and BD-G methods are quite similar, with the main observation being that the credible sets from the VB method are only slightly shorter. For the inactive coordinates, the behaviour is fundamentally quite different - the VB method produces only point masses (of length 0), while the full posterior produces some (very small) credible intervals of length greater than 0. The SAS method struggles with even the inactive coordinates, producing relatively long credible intervals that regularly do not cover 0.
+
+Another observation to make from this experiment is that it is the first time that we observe a large difference in performance induced by the choice of transform --- the credible intervals are much longer when the lava transform is used. This perhaps hints that the lava transform is killing more of the signal ($\tilde{X}_{lava} \beta$ has less information than $\tilde{X}_{trim} \beta$), but this is just speculation at this point. We consider this anomaly in more detail in the Appendix.
+
+Finally, we observe the remarkable fact that the VBD approximation to the posterior does {\it not} appear to be underestimating the posterior variance in the scenario with correlation. This is unusual, as the normal problem with (mean-field) variational approximations to the posterior is that they underestimate the posterior variance --- indeed if one looks at the SAS-VB and SAS-G methods, we see that the length of the credible intervals from the VB approximation are much smaller than those from the full posterior. This is not so with the BD procedure --- we see that the length of the credible intervals from the VBD methods are only very slightly smaller than the equivalent credible intervals produced by the full BD method, even when there is correlation. We will discuss this anomaly in the subsection which follows.
+
+\begin{table}[h]
+\centering
+
+\begin{tabular}{r|cc|cc|cc}
+\toprule
+               & VBD-T & VBD-L & BD-G-T & BD-G-L & SAS-VB & SAS-G \\ \bottomrule
+                & \multicolumn{6}{c}{$(n, p, s_0, q, \rho) = (100, 200, 5, 3, 0)$} \\\toprule
+$\ell_2-$error & 0.349   & 0.368   & 0.367  & 0.419  & 5.833  & 3.041 \\
+$\ell_1-$error & 0.899   & 0.951   & 0.944  & 1.083  & 41.092 & 16.42 \\ \hline
+Precision      & 1.000   & 1.000   & 0.996  & 1.000  & 0.618  & 0.601 \\
+Recall         & 1.000   & 1.000   & 1.000  & 1.000  & 0.950  & 1.000 \\
+$F_1$          & 0.500   & 0.500   & 0.499  & 0.500  & 0.336  & 0.346 \\ \hline
+Time (s)       & 0.185   & 0.194   & 78.55  & 78.27  & 0.353  & 98.36 \\ \hline
+Coverage (A)   & 0.971   & 0.996   & 0.969  & 0.996  & 0.356  & 0.847 \\
+Length (A)     & 0.492   & 0.721   & 0.523  & 0.753  & 0.211  & 1.823 \\ \hline
+Coverage (I)   & 1.000   & 1.000   & 1.000  & 1.000  & 0.868  & 0.994 \\
+Length (I)     & 0.000   & 0.000   & 0.020  & 0.008  & 0.029  & 0.387 \\ \bottomrule 
+& \multicolumn{6}{c}{$(n, p, s_0, q, \rho) = (100, 200, 5, 3, 0.75)$} \\ \toprule
+$\ell_2-$error & 0.708 & 0.648 & 0.818 & 0.743 & 11.131 & 6.503 \\
+$\ell_1-$error & 1.844 & 1.679 & 2.116 & 1.909 & 66.831 & 38.45 \\ \hline
+Precision      & 1.000 & 1.000 & 0.995 & 0.999 & 0.233  & 0.263 \\
+Recall         & 1.000 & 1.000 & 1.000 & 1.000 & 0.815  & 0.995 \\
+$F_1$          & 0.500 & 0.500 & 0.499 & 0.500 & 0.171  & 0.204 \\ \hline
+Time (s)       & 0.203 & 0.204 & 72.72 & 75.62 & 0.384  & 69.50 \\ \hline
+Coverage (A)   & 0.971 & 0.979 & 0.956 & 0.973 & 0.072  & 0.380 \\
+Length (A)     & 0.972 & 0.964 & 1.040 & 1.045 & 0.148  & 1.764 \\\hline
+Coverage (I)   & 1.000 & 1.000 & 1.000 & 1.000 & 0.803  & 0.933 \\
+Length (I)     & 0.001 & 0.000 & 0.054 & 0.044 & 0.035  & 0.410 \\
+\bottomrule
+\end{tabular}
+\caption{$(n, p, s_0, q) $ are given by $(100, 200, 5, 3)$ in both scenarios, the correlation between the unconfounded features is 0 in the top scenario and 0.75 in the bottom scenario. The trim transform is denoted, T, the lava transform is denoted, L. The Bayesian deconfounding methods are denoted VBD and BD-G where the variational approximation and the Gibbs sampler have been used respectively. Uncertainty quantification performed on active coordinates and inactive coordinates are reported separately (denoted by (A) and (I) respectively). }
+\label{Tab:UQ}
+\end{table}
+
+%\begin{table}[h]
+%\centering
+%\begin{tabular}{r|cc|cc|cc}
+%\toprule
+%               & VBD-T & VBD-L & BD-G-T & BD-G-L & SAS-VB & SAS-G \\ \hline
+%$\ell_2-$error & 0.349   & 0.368   & 0.367  & 0.419  & 5.833  & 3.041 \\
+%$\ell_1-$error & 0.899   & 0.951   & 0.944  & 1.083  & 41.092 & 16.42 \\ \hline
+%Precision      & 1.000   & 1.000   & 0.996  & 1.000  & 0.618  & 0.601 \\
+%Recall         & 1.000   & 1.000   & 1.000  & 1.000  & 0.950  & 1.000 \\
+%$F_1$          & 0.500   & 0.500   & 0.499  & 0.500  & 0.336  & 0.346 \\ \hline
+%Time (s)       & 0.185   & 0.194   & 78.55  & 78.27  & 0.353  & 98.36 \\ \hline
+%Coverage (A)   & 0.971   & 0.996   & 0.969  & 0.996  & 0.356  & 0.847 \\
+%Length (A)   & 0.492   & 0.721   & 0.523  & 0.753  & 0.211  & 1.823 \\ \hline
+%Coverage (I)     & 1.000   & 1.000   & 1.000  & 1.000  & 0.868  & 0.994 \\ 
+%Length (I)     & 0.000   & 0.000   & 0.020  & 0.008  & 0.029  & 0.387 \\
+%\bottomrule
+%\end{tabular}
+%\caption{$(n, p, s_0, q) $ are given by $(100, 200, 5, 3)$. Computed on 100  replications of the data. The trim transform is denoted, T-, the lava transform is denoted, L-. The Bayesian deconfounding methods are denoted VBD and BD-G where the variational approximation and the Gibbs sampler have been used respectively. Uncertainty quantification performed on active coordinates and inactive coordinates are reported separately (denoted by (A) and (I) respectively). \textbf{NOTE: VB approximation probably works well here because there is no correlation between features}. }
+%\label{Tab:UQ}
+%\end{table}
+
+\begin{figure}[h]
+\centering
+  \includegraphics[width=0.8\linewidth]{../Figures/credible_interval_comparison.pdf}
+  \caption{Sample of credible intervals from the VBD, BD-G and SAS-G methods.}
+  \label{fig:credible_interval_sample}
+\end{figure}
+
+%\begin{figure}[h]
+%\centering
+%  \includegraphics[width=0.8\linewidth]{../Figures/signal_prop.pdf}
+%    \includegraphics[width=0.8\linewidth]{../Figures/weighted_signal_props.pdf}
+%  \caption{\textbf{Top:} The proportion of the perturbation signal ($Xb$) removed and the useful signal ($X \beta$) remaining with truncation at $k$ - higher is better for both lines. The idea is that we want to save a large amount of the signal from $X \beta$, while removing as much of $X b$ as possible.
+%  \textbf{Bottom:} Arithmetic and geometric means of the two lines above. For both metrics, the highest value is achieved by removing the first $q$ singular directions. This is just one way of adjusting the signals, but}
+%\end{figure}
+%\subsubsection*{On Correlation}
+\subparspacenonewline
+{\bf On Correlation.}
+In the simulations presented above, we have included examples where the unconfounded design matrix, $E$, has correlation between features. Remarkably, we see that the Bayesian deconfounding procedure deals with this correlation very well; it yields good estimation, model selection, and --- most surprisingly for the VB approximation --- uncertainty quantification. Here we will demonstrate that correlated features can be viewed as a form of confounding, and hence that the deconfounding procedure is also a useful tool for dealing with correlation between features. 
+
+Consider first a Gaussian vector $Z \sim \N_p(0, \Sigma_\rho)$, where $\textrm{Var}(Z_i) = 1$ for all $i$ and $\textrm{Cov}(Z_i, Z_j) = \rho$ for all $i \neq j$. Such a vector can also be written as:
+$$
+Z_i = \sqrt{\rho} H + \sqrt{1-\rho} W_i, \quad \textrm{for } i = 1,\dots,p,
+$$
+where $H, W_1, \dots, W_p \sim \N(0, 1)$ independently. Hence, the case of correlated features we have presented in the simulations, where each row $E_{i\cdot} \sim \N_p(0, \Sigma_\rho)$, can be seen as a form of confounding. In fact, we can write
+\begin{align*}
+E &= H'\Gamma' + E', \\
+H' &= (H'_1, \dots, H'_n)^T \in \R^{n \times 1},\\
+\Gamma' &= (\sqrt{\rho}, \dots, \sqrt{\rho})\in \R^{1 \times p},\\
+E &= ((E'_{1\cdot})^T, \dots, (E'_{n\cdot})^T)^T \in \R^{n \times p},
+\end{align*}
+where $H'_i \sim \N(0, 1)$ independently are the realisations of the confounding feature across $n$ observations, and now the features of the unconfounded design matrix are uncorrelated --- each realisation $E'_{i\cdot} \sim \N_p(0, \diag_p(\sqrt{1-\rho}))$. We then have
+
+\begin{align*}
+	X &= H\Gamma + E \\
+	  &= (H\, H')\left( \begin{matrix}
+	  	\Gamma \\ \Gamma'
+	  \end{matrix} \right) + E'.
+\end{align*}
+Adding this correlation structure to $E$ is thus equivalent to adding another hidden confounding feature (which does not necessarily affect the response $Y$). More complex correlation structures have similar representations --- for instance a block correlation structure is the same but with a hidden confounding variable for each block.
+ Recalling that these procedures require no knowledge of the number of confounding features, the presence of correlation should automatically be dealt with, and thus these methods which have been designed to account for confounding features should be able to deal with feature correlation as well. 
+
+%%% Removed - evidence of correlation removal %%%
+%Figure \ref{fig:corr_vs_confounding} (a) plots the mean value (over 1000 realisations) of the singular values of the design matrix, $X$, when produced: (i) by the confounding representation of correlation and (ii) with correlation $\rho$ between each feature. One can see that the structure is identical - with one very large singular value (representing the $q = 1$ confounding feature). 
+%
+%\begin{figure}[h]
+%\centering
+%\subfloat[Singular values]{
+% \includegraphics[width=0.45\linewidth]{../Figures/corr_vs_confounding.pdf}
+%  }
+%  \subfloat[Pairwise correlation.]{
+%  \includegraphics[width=0.45\linewidth]{../Figures/X_tilde_corr.pdf}
+%  }
+%  \caption{{\bf (Left): }Mean value (over 1000 realisations) of the singular values of the design matrix, $X$, when produced: (i) by the confounding representation of correlation and (ii) with correlation $\rho$ between each feature. {\bf Right:} Distribution (100 realisations) of the estimate of pairwise feature correlation of $\tilde{X}$.}
+%  \label{fig:corr_vs_confounding}
+%\end{figure}
+%
+%To see that the BD and CBM methods are dealing with feature correlation effectively, consider Figure \ref{fig:corr_vs_confounding} (b). We have plotted the distribution of an estimate of the pairwise feature correlation of $\tilde{X}$ over 100 realisations. The design matrix $X$ has been drawn with $X_{i\cdot} \sim \N_p(0, \Sigma_\rho)$ with $\rho = 0.5$. One can see that both the trim and lava transforms remove virtually all of the feature correlation, while when no transform is used the correlation is around 0.5.
+
+
+
+To see this effect empirically, consider the second example presented in Table \ref{Tab:UQ}, where each pair of unconfounded features has correlation $0.75$. Looking at the SAS methods - we see that the VB approximation to the posterior has credible intervals which are far too short, meaning that they are not taking into account the correlation between the features. The credible intervals from the full posterior are much longer than the VB approximation, demonstrating that they are taking into account the reduction in information caused by the correlation, but they suffer from too much bias to have good coverage. The BD methods, and crucially the VB approximation to the posterior, all perform very well, with a suitable length --- approximately $1/\sqrt{1-\rho}$ times the length of the example with no correlation --- and coverage. The fact that the credible intervals from the variational posterior are about the same length as those from the full posterior demonstrates that the BD procedure has removed the correlation between features --- otherwise we would expect the credible intervals from the VBD procedure to be much smaller.
+
+\subparspacenonewline
+{\bf Doubly debiased uncertainty quantification.}
+%\subsubsection*{Doubly debiased uncertainty quantification}
+Here we consider the effect of `double debiasing', and the quality of uncertainty quantification provided by 4 methods: $(i)$ Variational Bayesian Deconfounding (VBD), the method described in detail in this work; $(ii)$ I-SVB, the method provided in our work with Alice and Ismael; $(iii)$ Debiased Variational Bayesian Deconfounding (D-VBD), a method which first performs deconfounding via placing a prior on $b$, and then performs debiasing in the same way as I-SVB; $(iv)$ the Doubly Debiased Lasso \citep{GCB22}, with the code provided by their package \texttt{DDL}. The results are in Table \ref{Tab:double_debiasing_results}.
+
+When there are no confounders ($q = 0$), we see that the Bayesian methods perform very similarly --- with the I-SVB method performing slightly better. This does make sense, as both the VBD and D-VBD methods perform the trim transform on the data, which causes these methods to throw away some information unnecessarily since there is no confounding. Even so, both the VBD and D-VBD methods still provide decent uncertainty quantification, and a MAE and length which is better than the DDL.
+
+As soon as confounders are present ($q > 0$), we see the performance of the I-SVB method drop off dramatically, as it cannot seem to compensate for the confounding effects. The VBD and D-VBD methods continue to perform the best, but the DDL method still offers good uncertainty quantification with a coverage close to 0.95. Remarkably, we see virtually no difference in performance between the debiased Bayesian approach (D-VBD) and the approach which performs a single deconfounding step (VBD). We might expect the extra debiasing step to help when there is correlation between the columns of $E$, but as we saw previously the single deconfounding step is essentially able to remove this correlation when $\Sigma_E = \Sigma_\rho$ by viewing it as an extra form of confounding. More interesting, however, is that the VBD procedure performs just as well as the debiased VBD procedure when the correlation structure is given by $\Sigma_E = \Sigma_{AR}^\rho$, which we have not shown can be viewed as a form of confounding. 
+
+As a final observation, we note that the VBD and D-VBD methods provide high coverage, while also providing smaller credible intervals than the DDL method, thanks to a decreased bias as evidenced by the smaller MAE.
+
+\begin{table}
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l|r|c|ccc}
+\toprule
+Scenario $(n, p, s_0, q, \beta_i^0, \Sigma_E)$               & Method & Cov.  & MAE                          & Length              & Time\\
+\hline
+$(100 , 200 , 5  , 0  , \log n, I_p)$               & VBD    & 0.968 & 0.088  $\pm$  0.068          & 0.499  $\pm$  0.030 & 0.121  $\pm$  0.034\\
+                                                    & I-SVB  & 0.952 & \textbf{0.081  $\pm$  0.061} & \textbf{0.405  $\pm$  0.033} & 0.131  $\pm$  0.034\\
+                                                    & D-VBD & 0.970 & 0.088  $\pm$  0.067          & 0.506  $\pm$  0.035 & 0.150  $\pm$  0.035\\
+                                                    & DDL    & 0.942 & 0.120  $\pm$  0.087          & 0.564  $\pm$  0.076 & 0.741  $\pm$  0.140\\
+                                                    \hline
+$(100 , 200 , 5  , 3  , \log n, I_p)$               & VBD    & 0.966 & 0.091  $\pm$  0.070          & \textbf{0.491  $\pm$  0.029} & 0.116  $\pm$  0.025\\
+                                                    & I-SVB  & 0.704 & 0.146  $\pm$  0.159          & 0.356  $\pm$  0.101 & 0.219  $\pm$  0.062\\
+                                                    & D-VBD & 0.968 & \textbf{0.089  $\pm$  0.070} & 0.498  $\pm$  0.032 & 0.145  $\pm$  0.027\\
+                                                    & DDL    & 0.902 & 0.129  $\pm$  0.101          & 0.553  $\pm$  0.075 & 0.684  $\pm$  0.083\\
+                                                    \hline
+$(200 , 400 , 10 , 6  , \log n, \Sigma_{0.5})$      & VBD    & 0.974 & 0.088  $\pm$  0.067          & \textbf{0.489  $\pm$  0.021} & 0.338  $\pm$  0.052\\
+                                                    & I-SVB  & 0.392 & 0.429  $\pm$  0.561          & 0.376  $\pm$  0.189 & 0.986  $\pm$  0.279\\
+                                                    & D-VBD & 0.976 & \textbf{0.086  $\pm$  0.067} & 0.494  $\pm$  0.027 & 0.450  $\pm$  0.065\\
+                                                    & DDL    & 0.932 & 0.117  $\pm$  0.087          & 0.529  $\pm$  0.049 & 1.806  $\pm$  0.176\\
+                                                    \hline
+$(200 , 800 , 20 , 12 , \log n, \Sigma_{0.5})$      & VBD    & 0.950 & 0.089  $\pm$  0.070          & \textbf{0.446  $\pm$  0.020} & 0.564  $\pm$  0.079\\
+                                                    & I-SVB  & 0.100 & 1.925  $\pm$  1.448          & 0.484  $\pm$  0.093 & 1.370  $\pm$  0.350\\
+                                                    & D-VBD & 0.960 & \textbf{0.088  $\pm$  0.069} & 0.463  $\pm$  0.025 & 0.755  $\pm$  0.095\\
+                                                    & DDL    & 0.858 & 0.137  $\pm$  0.103          & 0.518  $\pm$  0.067 & 2.152  $\pm$  0.167\\
+                                                    \hline
+$(200 , 400 , 10 , 6 , \log n, \Sigma^{AR}_{0.5})$ & VBD    & 0.970 & 0.090  $\pm$  0.069          & \textbf{0.489  $\pm$  0.021} & 0.312  $\pm$  0.037\\
+                                                    & I-SVB  & 0.442 & 0.389  $\pm$  0.508          & 0.374  $\pm$  0.188 & 0.924  $\pm$  0.266\\
+                                                    & D-VBD & 0.976 & \textbf{0.089  $\pm$  0.068} & 0.495  $\pm$  0.026 & 0.421  $\pm$  0.069\\
+                                                    & DDL    & 0.922 & 0.118  $\pm$  0.094          & 0.529  $\pm$  0.047 & 1.684  $\pm$  0.169\\
+                                                    \hline
+$(200 , 800 , 20 , 12 , \log n, \Sigma^{AR}_{0.5})$ & VBD    & 0.954 & \textbf{0.065  $\pm$  0.049} & \textbf{0.327  $\pm$  0.014} & 0.606  $\pm$  0.130\\
+                                                    & I-SVB  & 0.108 & 1.327  $\pm$  0.986          & 0.475  $\pm$  0.088 & 1.431  $\pm$  0.560\\
+                                                    & D-VBD & 0.970 & \textbf{0.065  $\pm$  0.049} & 0.339  $\pm$  0.018 & 0.776  $\pm$  0.129\\
+                                                    & DDL    & 0.846 & 0.108  $\pm$  0.080          & 0.390  $\pm$  0.051 & 2.201  $\pm$  0.291\\
+\bottomrule
+\end{tabular}
+}
+\caption{Assessing the quality of the uncertainty quantification provided by the different methods.}
+\label{Tab:double_debiasing_results}
+\end{table}
+
+\subparspacenonewline
+{\bf Riboflavin dataset.}
+%\subsubsection*{Riboflavin dataset}
+We now turn to assessing the performance of these methods on real data. We consider the \texttt{riboflavin} dataset, which consists of 71 observations of 4088 features alongside a response. In order to assess the performance of these methods for uncertainty quantification, we need to generate synthetic datasets with an underlying $\beta^0$ which is the `truth'. 
+
+In order to generate a synthetic, confounded dataset with the real design matrix, $X \in \R^{71 \times 4088}$, we perform the following procedure. For a fixed $q > 0$, we generate a random matrix $\Gamma \in \R^{q \times p}$, which represents the effect of the confounding variables $H$ on $X$. We then minimise the objective $\sum_{i = 1}^n \|X_{i\cdot} - [H\Gamma]_{i\cdot}\|_2^2$ with respect to the matrix $H$, (solved by $\hat{H} = X  \Gamma^T  (\Gamma  \Gamma^T)^{-1}$), to obtain our matrix of confounding variables. For a fixed truth $\beta^0$ and some $\delta^0 \in \R^q$ which will be specified, we then generate a response $Y = X\beta^0 + H\delta^0 + \eps$, where $\eps \sim \N_n(0, I_n)$. 
+
+We consider a scenario where $(s_0, q, \beta^0_*, \beta_i^0, \delta_i^0) = (5, 5, \log n, \log n, \log n)$, which means that $\beta^0$ is $s_0-$sparse, with the parameter of interest (one coordinate) given by $\beta_*^0$, other non-zero coordinates given by $\beta_i^0$, and the coordinates of $\delta^0$ given by $\delta_i^0$. We consider 100 randomly sampled coordinates, and for each coordinate simulate 100 datasets, computing: $(i)$ the empirical coverage of the credible/confidence intervals produced by each method; $(ii)$ the mean absolute error of the estimate from each method as an estimator for the truth; $(iii)$ the length of the credible/confidence intervals; and $(iv)$ the computation time, we then report the mean value of these quantities over the 100 coordinates.
+
+In this scenario, we see that the debiased Bayesian deconfounding procedure (D-VBD) performs better than each other method. It has approximately the right coverage, and a much smaller MAE than the next best method. Though we have seen that the deconfounding step seems to be able to remove simple correlation structures from the data, the VBD method without debiasing struggles here, likely because we are dealing with real data and the correlation structure will not be so simple. 
+%We parameterise each scenario by $(s_0, q, \beta_*^0, \beta_i^0, \delta^0_i)$, which means that $\beta^0$ is $s_0-$sparse, with the parameter of interest (one coordinate) given by $\beta_*^0$, other non-zero coordinates given by $\beta_i^0$, and the coordinates of $\delta^0$ given by $\delta_i^0$. In each scenario, we consider 100 randomly sampled coordinates, and for each coordinate simulate 100 datasets, computing: $(i)$ the empirical coverage of the credible/confidence intervals produced by each method; $(ii)$ the mean absolute error of the estimate from each method as an estimator for the truth; $(iii)$ the length of the credible/confidence intervals; and $(iv)$ the computation time, we then report the mean values over the 100 coordinates.
+
+\begin{table}
+\centering
+\resizebox{\textwidth}{!}{
+\begin{tabular}{l|r|c|ccc}
+\toprule
+Scenario $(n, p, s_0, q, \beta^0_*, \beta_i^0, \delta_i^0)$               & Method & Cov.  & MAE                          & Length              & Time\\
+\hline
+\texttt{riboflavin} & VBD   & 0.861 & 0.584  $\pm$  0.649 & \textbf{1.042  $\pm$  0.006} & 1.042  $\pm$  0.219\\
+$(71, 4088, 5, 5, \log n, \log n)$                                      & I-SVB & 0.604 & 0.433  $\pm$  0.449 & 0.691  $\pm$  0.098 & 1.968  $\pm$  0.409\\
+                                      & D-VBD & 0.971 & \textbf{0.195  $\pm$  0.159} & 1.090  $\pm$  0.060 & 1.647  $\pm$  0.266\\
+                                      & DDL   & 0.755 & 0.580  $\pm$  0.487 & 1.695  $\pm$  0.385 & 2.116  $\pm$  0.297\\
+\bottomrule
+\end{tabular}
+}
+\caption{Performance on the riboflavin dataset. Metrics are the mean over 100 MC replications for 100 randomly sampled coordinates.}
+\label{Tab:riboflavin}
+\end{table}
+
+\subsection{Gaussian process regression}
+
+We present a brief simulation study to show that the deconfounded Gaussian process procedure proposed in Section \ref{sect:methodology} is effective in practice.
+\subparspace
+{\bf Non-linear regression with linear confounding. } We begin with a non-linear model with linear confounding, corresponding to a non-linear regression with a linear perturbation. We generate $X$ and $Y$ according to \eqref{eq:general_SEM}, with $\Gamma_{ij}, E_{ij}, H_{ij}, \delta_{i} \sim \mathcal{N}(0, 1),$ $n = 1000$ and $(p, q)$ specified in varying scenarios. We take as a true function $f_0(\bx) = \|\bx\|_2^{1/2}$ and use a Mat\'ern-1/2 kernel which should be able to model the underlying function effectively. We fit: $(i)$ the usual Gaussian process to $X$ and $Y$, \ref{fig:gp_lin_confounding}; and $(ii)$ the `deconfounded' Gaussian process posterior given by \eqref{eq:gp_posterior_linear} with $\Sigma = I_p$ (corresponding to the lava transform).
+
+% Moved to Methodology section
+%In Figure \ref{fig:gp_lin_confounding} we observe one realisation of the data and the corresponding fits. We see that the usual GP is being seriously thrown off by the perturbation induced by the confounding structure, and only seems to closely match the truth (the black line) when $x$ is close to 0 (and at this point recall that the perturbation $Xb$ vanishes). Theorem \ref{thm:gp_contraction_confounded} suggests that the deconfounded posterior should contract to the truth despite the confounding, and indeed we see that the deconfounded GP has a close fit to the true function throughout the support of $X$ --- even near the endpoints where there is less data and the smoothness of the prior does not match the underlying function.
+%\begin{figure}[!h]
+%\centering
+%{\bf $p = 1$}\\
+%  \includegraphics[width=0.8\linewidth]{../Figures/example_confounded_gp_regression.pdf}\\
+%  {\bf $p = 2, X = (2\cos \theta, 2\sin \theta)^T$}\\
+%   \includegraphics[width=0.8\linewidth]{../Figures/2d_embedding_example}
+%  \caption{A realisation of two GP fits when there is linear confounding present in the data.}
+%\label{fig:gp_lin_confounding}
+%\end{figure}
+
+Table \ref{Tab:nl_confounding} displays, for the ordinary GP and the deconfounded GP (Decon-GP) with $\Sigma = I_p$, the estimated $L_1-$ and $L_2-$ errors of the posterior mean as an estimator of $f_0(x)$, the mean pointwise coverage and length of the credible regions and the time to fit over 100 realisations of the dataset presented in Figure \ref{fig:gp_lin_confounding} ($p = 1$, first column) and other higher-dimensional scenarios. One can see that the story presented in Figure \ref{fig:gp_lin_confounding} generalises to many realisations and also the higher-dimensional settings, with the deconfounded GP providing a much smaller $L_1-$ and $L_2-$error in all cases. The uncertainty quantification provided by the deconfounded GP is also more reliable in each setting, and the deconfounded GP takes no longer to compute than the ordinary GP.
+
+\begin{table}
+\centering
+\resizebox{\textwidth}{!}{  
+\begin{tabular}{r|l|cccc}
+\toprule 
+&& \multicolumn{4}{c}{$($Number of features, Number of confounders $)$ }\\ \midrule
+Metric   & Method & $(1, 2)$   & $(4, 2)$ & $(8, 2)$ & $(8, 4)$ \\
+\midrule
+$L_1$    & GP     & 0.695  $\pm$  0.481 & 0.490  $\pm$  0.228 & 0.355  $\pm$  0.140 & 0.454  $\pm$  0.140\\
+         & Decon-GP   & {\bf 0.285  $\pm$  0.190} & {\bf 0.268  $\pm$  0.072} & {\bf 0.237  $\pm$  0.054} & {\bf 0.292  $\pm$  0.093} \\ \hline 
+$L_2$    & GP     & 0.752  $\pm$  0.951 & 0.419  $\pm$  0.402 & 0.234  $\pm$  0.191 & 0.353  $\pm$  0.220\\
+         & Decon-GP   & {\bf 0.139  $\pm$  0.172} & {\bf 0.118  $\pm$  0.064} & {\bf 0.088  $\pm$  0.037} & {\bf 0.127  $\pm$  0.071}\\ \hline 
+Coverage & GP     & 0.445  $\pm$  0.437 & 0.964  $\pm$  0.081 & 0.996  $\pm$  0.011 & 0.994  $\pm$  0.014\\
+         & Decon-GP   & {\bf 0.940  $\pm$  0.192} & {\bf 1.000  $\pm$  0.000} & {\bf 1.000  $\pm$  0.000} & {\bf 1.000  $\pm$  0.000} \\ \hline 
+Length   & GP     & 1.057  $\pm$  0.098 & 2.963  $\pm$  0.178 & 3.619  $\pm$  0.061 & 3.747  $\pm$  0.055\\
+         & Decon-GP   & 1.460  $\pm$  0.301 & 3.012  $\pm$  0.177 & 3.637  $\pm$  0.059 & 3.753  $\pm$  0.053\\ \hline 
+Time     & GP     & 2.888  $\pm$  0.113 & 3.241  $\pm$  0.129 & 4.074  $\pm$  0.218 & 4.499  $\pm$  0.312\\
+         & Decon-GP   & 2.958  $\pm$  0.181 & 3.202  $\pm$  0.151 & 4.173  $\pm$  0.277 & 4.480  $\pm$  0.246\\
+\bottomrule
+\end{tabular}
+}
+\caption{Estimates of the different metrics for the various GP regression methods where there is linear  confounding in the data. In each case $n = 1000$, $E_{ij}, H_{ij}, \Gamma_{ij}, \delta_i \sim \mathcal{N}(0,1)$ and $X = H\Gamma + E$.  Metrics are computed at vertices of the hypercubes where $\|\mathbf{x}_*\|_2 = 1$.}
+\label{Tab:nl_confounding}
+\end{table}\subparspacenonewline
+%{\bf Non-linear regression with a non-linear perturbation. } We investigate now a setting that is not yet completely covered by our theory --- non-linear regression with a non-linear perturbation. We sample $X$ now uniformly on the interval $(-2, 2)$.
+%We take as a true function $f_0(x) = |x|^{1/2}$ and use a Mat\'ern-1/2 kernel for the prior on $f$. We consider an oscillatory perturbation given by $g_0(x) = \sin(2\pi\omega \pi x)$ for different values of $\omega$.
+%Again, we fit: $(i)$ the usual Gaussian process to $X$ and $Y$, yielding the blue posteriors presented in Figure \ref{fig:gp_non_linear_pert}; and $(ii)$ the `deconfounded' Gaussian process posterior given now by \eqref{eq:gp_posterior_nonlinear} with $h$ given by the square exponential kernel, yielding the red posteriors.
+%
+%In Figure \ref{fig:gp_non_linear_pert} we observe one realisation of the data for each $\omega$ and the corresponding fits. In each scenario, we see that the traditional GP picks up the perturbation and this results in a fit which is oscillatory and does not closely match the shape of the truth. The deconfounded GP posterior exhibits precisely the same oscillatory behaviour as the GP when $\omega = 1/2$, though appears to have a slightly smoother fit. In the case $\omega = 2$, we still see some oscillatory behaviour in the deconfounded GP, though it is less pronounced in this case than it is for the GP posterior. In the cases with $\omega = 4$ or $8$, we see the oscillatory behaviour more or less vanish from the deconfounded GP, and the posterior mean is a good fit for the truth. We also see in the cases with a larger $\omega$ that the size of $\|L g_0\|_2$ is smallest, which our theory suggests should be the case.
+%
+%This is just one example of a perturbation, but it leads us to hypothesise that this deconfounding procedure will be able to remove high-frequency perturbations but may struggle with lower-frequency perturbations.
+%
+%\begin{figure}[!h]
+%\centering
+%  \includegraphics[width=\linewidth]{../Figures/example_omegas.pdf}
+%  \caption{A realisation of two GP fits when there are  non-linear perturbations in the data given by $g_0(x) = \sin(2\pi\omega x)$, with $\omega$ given in the title of each facet.}
+%\label{fig:gp_non_linear_pert}
+%\end{figure}
+%
+%Table \ref{Tab:nl_perturbation} displays, for three different methods, the estimated $L_1-$ and $L_2-$ errors of the posterior mean as an estimator of $f_0(x)$, the mean pointwise coverage and length of the credible regions and the time to fit over 100 realisations of the dataset presented in Figure \ref{fig:gp_non_linear_pert}. The first method is ordinary GP regression with kernel given by $k(x, x') =\exp\{-\|x-x'\|_2\}$. The methods prefixed with a Decon- correspond to our deconfounded GP regression with the same prior on $f$ given by the kernel $k$, but now placing a GP prior on the perturbation with kernel $h$ given by the square exponential kernel (denoed -SE) or the Mat\'ern kernel (-Mat).
+%
+% We can see that when $\omega = 1/2$, all of the methods have roughly the same performance, which is to be expected in light of Figure \ref{fig:gp_non_linear_pert}. However when $\omega \geq 2$, we see that the Decon-GP methods perform much better than the ordinary GP. In particular, the method which models the perturbation with the square exponential kernel performs best, probably because the smoothness of this prior reflects the analytic nature of the sine function, while the Mat\'ern-1/2 kernel does not.
+%\begin{table}
+%\centering 
+%\resizebox{\textwidth}{!}{ 
+%\begin{tabular}{r|l|cccc}
+%\toprule
+%Metric   & Method   & $\omega = 1/2$  & $\omega = 2$ & $\omega = 4$ & $\omega = 8$\\
+%\midrule
+%$L_1$    & GP       & 0.626  $\pm$  0.031& 0.305  $\pm$  0.013 & 0.304  $\pm$  0.014 & 0.149  $\pm$  0.018\\
+%         & Decon-GP-SE  & 0.625  $\pm$  0.032& {\bf 0.112  $\pm$  0.022} & {\bf 0.107  $\pm$  0.021} & {\bf 0.093  $\pm$  0.019} \\
+%         & Decon-GP-Mat & {\bf 0.624  $\pm$  0.031} & 0.209  $\pm$  0.013 & 0.207  $\pm$  0.014 & 0.131  $\pm$  0.019\\ \hline
+%$L_2$    & GP       & 0.492  $\pm$  0.048& 0.129  $\pm$  0.012 & 0.127  $\pm$  0.013 & 0.035  $\pm$  0.008\\
+%         & Decon-GP-SE  & {\bf 0.479  $\pm$  0.047} & {\bf 0.021  $\pm$  0.008} & {\bf 0.020  $\pm$  0.008} & {\bf 0.014  $\pm$  0.005} \\
+%         & Decon-GP-Mat & 0.487  $\pm$  0.048& 0.067  $\pm$  0.009 & 0.065  $\pm$  0.010 & 0.027  $\pm$  0.008\\ \hline
+%Coverage & GP       & 0.290  $\pm$  0.036& 0.722  $\pm$  0.038 & 0.726  $\pm$  0.037 & 0.975  $\pm$  0.020\\
+%         & Decon-GP-SE  & {\bf 0.470  $\pm$  0.039} & {\bf 0.999  $\pm$  0.005} & {\bf 0.999  $\pm$  0.005} & {\bf 1.000  $\pm$  0.000}\\
+%         & Decon-GP-Mat & 0.312  $\pm$  0.034& 0.922  $\pm$  0.029 & 0.929  $\pm$  0.032 & 0.994  $\pm$  0.010\\ \hline
+%Length   & GP       & 0.845  $\pm$  0.065& 0.845  $\pm$  0.065 & 0.845  $\pm$  0.066 & 0.845  $\pm$  0.064\\
+%         & Decon-GP-SE  & 1.280  $\pm$  0.090& 1.280  $\pm$  0.090 & 1.280  $\pm$  0.091 & 1.280  $\pm$  0.090\\
+%         & Decon-GP-Mat & 0.906  $\pm$  0.070& 0.906  $\pm$  0.070 & 0.906  $\pm$  0.071 & 0.906  $\pm$  0.069\\ \hline
+%Time     & GP       & 3.378  $\pm$  0.100& 3.594  $\pm$  0.254 & 4.183  $\pm$  0.255 & 4.054  $\pm$  0.149\\
+%         & Decon-GP-SE  & 5.744  $\pm$  0.310& 5.967  $\pm$  0.386 & 6.988  $\pm$  0.450 & 6.950  $\pm$  0.488\\
+%         & Decon-GP-Mat & 6.450  $\pm$  0.342& 6.764  $\pm$  0.472 & 7.917  $\pm$  0.582 & 7.570  $\pm$  0.273\\
+%\bottomrule
+%\end{tabular}
+%}
+%\caption{Estimates of the different metrics for the various GP regression methods where there is a non-linear perturbation in the data given by $g_0(x) = \sin(2 \pi \omega x)$. In each case $n = 1000$ and $X_i$ have been sampled uniformly on the interval $(-2, 2)$. The metrics have been computed at points $x_*$ evenly distributed in the interval $(-2, 2)$.}
+%\label{Tab:nl_perturbation}
+%\end{table}
+
+\section{Discussion}
+We have developed a Bayesian method for approaching the linear regression problem with the existence of unobserved confounding variables, by placing a sparse prior on the signal $\beta$ and a Gaussian prior on the perturbation $b$. Under suitable conditions on the prior, the Bayesian posterior contracts to the truth at the same rate as with no confounding, and which has the same order as the $\ell_1-$loss provided by the frequentist method given in \cite{CBM2020}. Moreover, we have illustrated that for a specific choice of prior covariance, we obtain the spectral transforms proposed by \cite{CBM2020}. We have demonstrated strong performance of the Bayesian method (and its variational approximation) in terms of estimation and model selection in a variety of different scenarios. Moreover, we have shown that the out-of-the-box uncertainty quantification provided by the posterior is reliable; and moreover, that additional debiasing after the deconfounding step actually appears unnecessary.
+
+\bibliographystyle{abbrvnat}
+\bibliography{ref.bib}
+
+\appendix
+\newpage
+\section{Proofs}
+To prove the main results, we first need the following Lemma which concerns the likelihood ratio given by
+\begin{align*}
+	\Delta_{n, \beta, \beta^0, b, b^0}(Y) = \frac{p_{n, \beta, b}}{p_{n, \beta^0, b^0}}(Y) = \exp\Big\{&-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + \eps^TX(\beta - \beta^0) \\
+ -\langle X(\beta - \beta^0), X(b - b^0)  \rangle_2	&-\frac{1}{2}\|X(b - b^0)\|_2^2 + \eps^TX(b - b^0) \Big\}.
+\end{align*}
+
+\begin{lemma}\label{lem:denom_control}
+	For $p$ sufficiently large and any $b^0 \in \R^p$ and any $\bezero \in \R^p$ with support $S_0$ and $s_0 = |S_0|$, with the prior given by $\Pi$, we have almost surely
+	\begin{align*}
+		\int \lratio(X, Y) d\Pi(\beta, b) \geq &\frac{\pi_p(s_0)}{ p^{2s_0}}e^{-1}e^{-\lambda\|\bezero\|_1}\\
+		\times & \underbrace{\sqrt{\frac{|\postCov |}{|\Sigma|}}e^{\frac{1}{2}(b^0)^T\left(\Sigma^{-1}\postCov  \Sigma^{-1}  - \Sigma^{-1}\right)b^0 }e^{\frac{1}{2}\eps^T X\postCov X^T\eps - (b^0)^T\Sigma^{-1}\postCov  X^T \eps}}_{=: F_1(b^0, \Sigma, X,\eps)},
+	\end{align*}
+	with $\postCov  = (X^TX + \Sigma^{-1})^{-1}$.
+\end{lemma}
+Though this expression is somewhat alarming, the factor in the second line of the display appears also in the numerator and will later cancel in the proofs.
+
+\begin{proof}{Proof of Lemma \ref{lem:denom_control}.}
+	We proceed as in \cite{CS-HV2015}. For the case $s_0 = 0$ the result follows trivially, so we can assume that $s_0 \geq 1$.
+%	We recall from the proof of Lemma 2 in \cite{CS-HV2015} the result that for any set $S$ and $s = |S| > 0$,
+%	$$
+%	\int_{\|\beta_S\|_1 \leq r} g_S(\beta_S) d\beta_S = e^{-\lambda r} \sum_{k = s}^\infty \frac{(\lambda r)^k}{k!} \geq e^{-\lambda r} \frac{(\lambda r)^s}{s!}.
+%	$$
+	By definition of $\lratio$, we have
+	\begin{align*}
+				\int \lratio(X, Y) d\Pi(\beta, b) &= \int \int \lratio (X, Y)d\Pig(b)d\Pi(\beta) \\ 
+				= \int e^{-\frac{1}{2}\|X(\beta - \bezero)\|_2^2 + \eps^T X(\beta - \bezero)} &\underbrace{\int e^{-\langle X(\beta - \beta^0), X(b - b^0)  \rangle_2 -\frac{1}{2}\|X(b - b^0)\|_2^2 + \eps^TX(b - b^0)}d\Pig(b)}_{=: I_1(b^0, \Sigma, X, \eps, \beta, \bezero)} d\Pi(\beta).
+	\end{align*}
+	We can work out the exact value of $I_1$ thanks to the Gaussian prior on $b$:
+	\begin{align}
+		I_1(b^0, \Sigma, X, \eps, \beta, \bezero) = F_1(\bezero, \Sigma, X, \eps)\cdot e^{\frac{1}{2}(\beta - \beta^0)^T X^TX \postCov X^TX(\beta - \beta^0)  - (X^T\eps - \Sigma^{-1}b^0)^T\postCov  X^TX(\beta - \beta^0)}, \label{eq:I_1}
+	\end{align}
+	with $\postCov $ and $F_1$ as in the statement of the Lemma.
+Using this, and the decomposition $L^T L = (I -X\postCov X^T)$, we have the following bound
+	\begin{align*}
+		\int \lratio(X, Y) d\Pi(\beta, b) &\geq F_1(\bezero, \Sigma, X, \eps) \\
+		\times& \underbrace{\int e^{-\frac{1}{2}\|LX(\beta - \bezero)\|_2^2 + \eps^T L^TL X(\beta - \bezero) + (b^0)^T\Sigma^{-1}\postCov  X^T X (\beta - \beta^0)}}_{=: I_2}.
+	\end{align*}
+	By the same argument as in \cite{CS-HV2015}, we can show that
+	$$
+	I_2 \geq \frac{\pi_p(s_0)}{p^{2s_0}}e^{-1} e^{-\lambda\|\beta^0\|_1},
+	$$
+	almost surely for $p$ sufficiently large, giving the result.
+\end{proof}
+
+\begin{proof}{Proof of Theorem \ref{thm:dimension}.}
+From Lemma \ref{lem:denom_control} we have, for $B \subset \R^p$,
+\begin{align*}
+&\Pi(B | Y) \leq \frac{e p^{2s_0}}{\pi_p(s_0)}e^{\lambda\|\beta^0\|_1} \frac{1}{F_1(b^0, \Sigma, X, \eps)}\times\\
+&\int_B e^{-\frac{1}{2}\|X(\beta - \bezero)\|_2^2 + \eps^T X(\beta - \bezero)}\left[\underbrace{\int e^{-\langle X(\beta - \bezero), X(b - b^0\rangle_2 - \frac{1}{2}\|X(b - b^0)\|_2^2 + \eps^T X(b - b^0)} d\Pig(b)}_{=: I(b^0, \Sigma, X, \eps, \beta, \bezero)} \right]d\Pi(\beta) .
+\end{align*}
+%We have another form for $I(b^0, \Sigma, X, \eps)$ given by the below
+%\begin{align*}
+%I(b^0, \Sigma, X, \eps, \beta, \bezero) &= \sqrt{\frac{|\postCov |}{|\Sigma|}}e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - (b^0)^T \Sigma^{-1}b^0 \right)},\\
+%	\postCov  &= (X^TX + \Sigma^{-1})^{-1},\\
+%	\mu_p &= \postCov (X^T\eps - \Sigma^{-1}b^0 - X^TX(\beta - \beta_0)). 
+%\end{align*}
+%Expanding the first line with the expression for $\mu_p$, one obtains,
+%$$
+%I(b^0, \Sigma, X, \eps, \beta, \bezero) = F_1(\bezero, \Sigma, X, \eps)\cdot e^{\frac{1}{2}(\beta - \beta^0)^T X^TX \postCov X^TX(\beta - \beta^0)  - (X^T\eps - \Sigma^{-1}b^0)^T\postCov  X^TX(\beta - \beta^0)}. 
+%$$
+Recalling the value of $I_1$ from Equation \eqref{eq:I_1}, this gives us the bound
+\begin{align*}
+\Pi(B | Y) \leq \frac{e p^{2s_0}}{\pi_p(s_0)}e^{\lambda\|\beta^0\|_1} \int_B& e^{-\frac{1}{2}\|X(\beta - \bezero)\|_2^2 + \eps^T X(\beta - \bezero)} \\
+\times&e^{\frac{1}{2}(\beta - \beta^0)^T X^TX \postCov X^TX(\beta - \beta^0)  - (X^T\eps - \Sigma^{-1}b^0)^T\postCov X^TX(\beta - \beta^0)} d\Pi(\beta).	
+\end{align*}
+We can combine terms in the integral like so,
+\begin{align}
+\int_B & e^{-\frac{1}{2}\|X(\beta - \bezero)\|_2^2 + \eps^T X(\beta - \bezero)} e^{\frac{1}{2}(\beta - \beta^0)^T X^TX \postCov X^TX(\beta - \beta^0)  - (X^T\eps - \Sigma^{-1}b^0)^T\postCov X^TX(\beta - \beta^0)} d\Pi(\beta) \nonumber\\
+=\int_B &e^{-\frac{1}{2}(\beta - \bezero)^T X^T\left(I - X\postCov X^T \right)X(\beta - \bezero)} 
+\cdot  e^{\eps^T (I - X\postCov  X^T)X(\beta - \bezero)} e^{(b^0)^T\Sigma^{-1}\postCov  X^TX (\beta - \bezero)} d\Pi(\beta). \label{eq:int_bound_A}
+	\end{align}
+	Consider now the matrix $A := I - X\postCov X^T = L^TL$. For the first term, we then have $(\beta - \bezero)^TX^TAX(\beta - \bezero) = \|LX(\beta - \bezero)\|_2^2$. Restrict now to the set $\mathcal{T}_0 = \{\|\eps^TAX\|_\infty \leq \bar{\lambda}\}$. Then we have,
+$$
+\eps^T (I - X\postCov  X^T)X(\beta - \bezero) \leq \|\eps^T AX\|_\infty\|\beta - \bezero\|_1.
+$$
+For the third term, recall that $b^0 = (\Gamma^T\Gamma + \Sigma_E)^{-1} \Gamma^T \delta$, and under assumption \eqref{A1} $\|b^0\|_2 = O(\sigma/\sqrt{p})$ by Lemma 6 of \cite{CBM2020}. We then have the bound
+$$
+|(b^0)^T\Sigma^{-1}\postCov  X^TX (\beta - \bezero)| \leq \|b^0\|_2 \|\Sigma^{-1}\postCov  X^TX (\beta - \bezero) \|_2 \leq \|b^0\|_2\|\Sigma^{-1}\postCov  X^TX\| \|\beta - \bezero\|_1.
+$$
+Examining this, under the assumption {\color{assumption} $\|\Sigma^{-1} \postCov  X^TX\| = o_p(\sqrt{p})$} we obtain the following bound for the second two terms of the integral on $\mathcal{T}_0:$
+$$
+e^{\eps^T (I - X\postCov  X^T)X(\beta - \bezero) +(b^0)^T\Sigma^{-1}\postCov  X^TX (\beta - \bezero)} \leq e^{(\bar{\lambda} + o_p(1) )\|\beta - \bezero\|_1}.
+$$
+Combining, we end with the following bound on the expectation (under $\bezero$ and $b^0$) of the integrand in \eqref{eq:int_bound_A}:
+\begin{align*}
+E_0\left[e^{-\frac{1}{2}\|LX(\beta - \bezero)\|_2^2 + (\bar{\lambda}+o_p(1))\|\beta - \bezero\|_1} \mathbb{I}_{\mathcal{T}_0}\right] \leq e^{-\frac{\lambda}{4\bar{\lambda}}\|LX(\beta - \bezero)\|_2^2 + \frac{\lambda}{2}\|\beta - \bezero\|_1}.
+\end{align*}
+Proceeding as in \cite{CS-HV2015}, we end up with the bound
+\begin{align*}
+E_0\left[\Pi(B | Y) \mathbb{I}_{\mathcal{T}_0 }\right] \leq  \frac{e p^{2s_0}}{\pi_p(s_0)}e^{4\lambda \bar{\lambda}s_0 / \|LX\|^2\phi^2_{LX}(S_0)} \int_B e^{-\frac{\lambda}{4} \|\beta - \bezero\|_1 + \lambda\|\beta\|_1} d\Pi(\beta),
+\end{align*}
+and again following the proof of Theorem 10 in \cite{CS-HV2015}, we find that $E_0\left[\Pi( B | Y) \right] \rightarrow 0$ for the set,
+$$
+B = \left\{\beta: |S_\beta| > |S_0|\left(1 + \frac{M}{A_4}\left[1 + \frac{16}{\phi_{LX}(S_0)^2}\frac{\lambda}{\bar{\lambda}} \right]\right)\right\}.
+$$
+\end{proof}
+With this, we are finally in a position to prove Theorem \ref{thm:recovery}. \\
+
+\begin{proof}{Proof of Theorem \ref{thm:recovery}.}
+By Theorem \ref{thm:dimension}, the support of the posterior is asymptotically
+$
+E = \{\beta : |S_\beta| \leq D_0 \}
+$
+where
+$$
+D_0 = \left(1 + \frac{3}{A_4} + \frac{33}{A_4 \phi(S_0)^2}\frac{\lambda}{\bar{\lambda}}\right)s_0.
+$$
+Thus, it is sufficient to prove that the probability of the intersection of each of the three events in the statement of the Theorem go to zero.
+Defining $\mathcal{T}_0$ as in the proof of Theorem \ref{thm:dimension} and recalling Equation \eqref{eq:int_bound_A}, we have on $\mathcal{T}_0$
+\begin{align*}
+	\Pi(B | Y) &\leq \frac{e p^{2s_0}}{\pi_p(s_0)} \int_B e^{\lambda\|\beta^0\|_1} \cdot e^{-\frac{1}{2}\|LX(\beta - \bezero)\|_2^2} 
+\cdot  e^{\bar{\lambda}\|\beta - \bezero\|_1} \cdot e^{(b^0)^T\Sigma^{-1}\postCov  X^TX (\beta - \bezero)} d\Pi(\beta) 
+\end{align*}
+By the triangle inequality, 
+$
+\lambda\|\bezero\|_1 = \lambda\|\bezero - \beta + \beta\|_1 \leq \lambda\|\bezero - \beta\|_1 + \lambda\|\beta\|_1,
+$
+and so on $\mathcal{T}_0$
+\begin{align*}
+		\Pi(B | Y) \leq 	\frac{e p^{2s_0}}{\pi_p(s_0)} \int_B  e^{-\frac{1}{2}\|LX(\beta - \bezero)\|_2^2} 
+\cdot  e^{3\bar{\lambda}\|\beta - \bezero\|_1 + \lambda\|\beta\|_1 + o_p(1)\|\beta - \bezero\|_1} d\Pi(\beta).
+\end{align*}
+By definition of the uniform compatibility number
+\begin{align}
+(4 - 1)\bar{\lambda}\|\beta - \bezero\|_1 &\leq \frac{4\bar{\lambda} \|LX(\beta - \bezero)\|_2|S_{\beta-\bezero}|^{1/2}}{\|LX\| \bar{\phi}_{LX}(|S_{\beta - \bezero}|)} - \bar{\lambda}\|\beta - \bezero\|_1 \nonumber\\
+&\leq \frac{1}{4}\|LX(\beta - \bezero)\|_2^2 + \frac{16\bar{\lambda}^2 |S_{\beta - \bezero}|}{\|LX\|^2 \bar{\phi}_{LX}(|S_{\beta - \bezero}|)^2} - \bar{\lambda}\|\beta - \bezero\|_1. \label{eq:lambda_beta_beta_0}
+\end{align}
+Now, on $E$, $|S_{\beta - \bezero}| \leq |S_\beta| + s_0 \leq D_0 + s_0$, and so $\bar{\phi}_{LX}(|S_{\beta - \bezero}|) \geq \bar{\phi}(D_0 + s_0) = \bar{\psi}_{LX}(S_0)$. This gives, for $B \subset E$
+\begin{align*}
+	\Pi(B | Y)\mathcal{T}_0 \leq \frac{e p^{2s_0}}{\pi_p(s_0)}e^{\frac{16\bar{\lambda}^2(D_0 + s_0)}{\|LX\|^2\bar{\psi}_{LX}(S_0)^2}} \cdot \int_B e^{-\frac{1}{4} \|LX(\beta - \bezero)\|_2^2 -\bar{\lambda}\|\beta - \bezero\|_1 + \lambda\|\beta\|_1}d\Pi(\beta). 
+\end{align*}
+Since $P_0(\mathcal{T}_0) \rightarrow 1$, it suffices to show that the right hand side goes to zero for the events $B$ given by the Theorem.
+
+{\bf First assertion.} Take $B := \{\beta \in E : \|LX(\beta - \bezero)\|_2  > R\}$. We have $\pi_p(s_0) \geq (A_1 p^{-A_3})^{s_0}\pi_p(0)$ by assumption, and so
+\begin{align*}
+\Pi(B | Y)\mathcal{T}_0 &\leq \frac{e p^{2s_0}}{\pi_p(s_0)}e^{\frac{16\bar{\lambda}^2(D_0 + s_0)}{\|LX\|^2\bar{\psi}_{LX}(S_0)^2}-\frac{1}{4}R^2} \cdot \int e^{-\bar{\lambda}\|\beta - \bezero\|_1 + \lambda\|\beta\|_1}d\Pi(\beta) \\
+&\leq A_1^{-s_0}p^{(2+A_3)s_0}e^{\frac{16\bar{\lambda}^2(D_0 + s_0)}{\|LX\|^2\bar{\psi}_{LX}(S_0)^2}-\frac{1}{4}R^2} \cdot \sum_{s=0}^p \pi_p(s)2^s.
+\end{align*}
+Setting,
+$$
+\frac{1}{4}R^2 = (3+A_3)s_0 \log p + \frac{16\bar{\lambda}^2(D_0 + s_0)}{\|LX\|^2\bar{\psi}_{LX}(S_0)^2},
+$$
+$\Pi(B | Y)\mathcal{T}_0 \rightarrow 0$. We can simplify this choice by observing that $R^2 \lesssim \frac{(D_0 + s_0)\log p}{\bar{\psi}_{LX}(S_0)^2} =: \tilde{R}^2$, and so we have, for sufficiently large $M$, and 
+$$B = \left\{\beta : \|LX(\beta - \bezero)\|_2 > \frac{M}{\bar{\psi}_{LX}(S_0)} \frac{\sqrt{S_0 \log p}}{\phi(S_0)} \right\},$$
+$E_0 \Pi(B | Y) \rightarrow 0$.
+
+{\bf Second assertion.} Similar to how \eqref{eq:lambda_beta_beta_0} is derived, we have
+$$
+\bar{\lambda} \|\beta - \bezero\|_1 \leq \frac{\|LX(\beta - \bezero)\|_2|S_{\beta - \bezero}|^{1/2}}{\|LX\| \bar{\phi}_{LX}(|S_{\beta - \bezero}|)} \leq \frac{1}{2}\|LX(\beta - \bezero)\|_2^2 + \frac{\bar{\lambda}^2|S_{\beta - \bezero}|}{2\|LX\|^2 \bar{\psi}(S_0)^2}.
+$$
+The second assertion then follows from the first.
+
+{\bf Third assertion.} We have,
+$$
+\|LX(\beta - \bezero)\|_2 \geq \tilde{\phi}(|S_{\beta - \bezero}|)\|LX\|\|\beta - \bezero\|_2 \geq \tilde{\psi}(S_0)\|X\| \|\beta - \bezero\|_2, 
+$$
+and thus the third assertion follows from the first.
+\end{proof}
+
+\begin{proof}{Proof of Lemma \ref{lem:L_and_LX}}
+Writing the SVD of $X$ as $X = UDV^T$, where $U \in \R^{n \times r}, D \in \R^{r \times r}$ and $V \in \R^{r \times p}$ with columns given by $\{\mathbf{v}_1, \dots, \mathbf{v}_r\}$, it is easy to show
+	$$
+	I - X\postCov  X^T = \sum_{k = 1}^r \frac{1}{1+\lambda_k \varphi_k} \mathbf{u}_k \mathbf{u}_k^T + \sum_{k = r + 1}^p \mathbf{u}_k \mathbf{u}_k^T,
+	$$
+	which gives $L$ directly as
+	$$
+	L = \sum_{k = 1}^r \frac{1}{\sqrt{1+\lambda_k \varphi_k}} \mathbf{u}_k \mathbf{u}_k^T + \sum_{k = r + 1}^p \mathbf{u}_k \mathbf{u}_k^T.
+	$$
+	Applying this to $X$, we obtain
+	$$
+	LX = \sum_{k = 1}^r \sqrt{\frac{\lambda_k}{1+\lambda_k \varphi_k}} \mathbf{u}_k \mathbf{v}_k^T = U \tilde{D} V^T.
+	$$
+\end{proof}
+
+\begin{proof}{Proof of Lemma \ref{lem:compatibility_relation}}
+The form of $L$ given in Lemma \ref{lem:L_and_LX} gives us the following relationships:
+	\begin{align*}
+	\|LX \beta\|_2^2 = \sum_{k=1}^r \frac{\lambda_k}{1+\lambda_k \varphi_k} (\mathbf{v}_k^T \beta)^2  &\geq \frac{1}{1+C} \sum _{k = 1}^r \lambda_k (\mathbf{v}_k^T \beta)^2 = \frac{1}{1+C} \|X\beta\|_2^2		\\
+	\|LX\| &\leq \|X\|.
+	\end{align*}
+	By definition of $\phi_X(S)$, for any $\beta \in B:= \{\|\beta_{S^c}\|_1 \leq \|\beta_S\|_1$ and $\beta_S \neq 0\}$ we have
+	\begin{align*}
+	\|X \beta \|_2 |S|^{1/2} &\geq \phi_X(S) \|X\| \|\beta_S\|_1,		\\
+	\Rightarrow \|L X \beta \|_2 |S|^{1/2} \geq \frac{1}{\sqrt{1+C}} \|X \beta \|_2 |S|^{1/2} &\geq \frac{1}{\sqrt{1+C}} \phi_X(S) \|X\| \|\beta_S\|_1 \\
+	&\geq \frac{1}{\sqrt{1+C}} \phi_X(S) \|LX\| \|\beta_S\|_1.
+	\end{align*}
+	Recalling that $\phi_{LX}(S)$ is the largest number such that $\|LX \beta \|_2 |S|^{1/2} \geq \phi_{LX}(S)\|LX\|\|\beta_S\|_1$ for all $\beta \in B$, this gives that $\phi_{LX}(S) \geq \frac{1}{\sqrt{1+C}} \phi_X(S)$.
+\end{proof}
+
+\begin{proof}{Proof of Theorem \ref{thm:gp_contraction}}
+By shifting the observation vector $\mathbf{y}$ by $\mathbf{f_0}$, we can assume that $f_0$ is 0.
+Define the tests $\phi = \mathbf{1}\{(L\mathbf{f}_1)^T (L\mathbf{y}) > D\|L\mathbf{f}_1\|_2\}$ for some $D > 0$. Under $P_{0}$, we have
+$$
+P^{(n)}_{f_0, g_0} \phi = P( \mathcal{N}(0, \|L\mathbf{f}_1\|_2^2) > D\|L \mathbf{f}_1 \|_2 + \|L \mathbf{f}_1 \|_2 \|L \mathbf{g}_0\|_2) = 1 - \Phi(D + \|L\mathbf{g}_0\|_2).
+$$
+Similarly, 
+$$
+P^{(n)}_{f, g_0} (1-\phi) = \Phi(D - \|L\mathbf{f}_1\|_2/2 - \|L\mathbf{g}_0\|_2).
+$$
+Hence, as $n \rightarrow \infty$,
+$$
+P^{(n)}_{f_0, g_0} \phi + \sup_{f : \|f - f_1\|_{L, n, 2} < \eps/2} P^{(n)}_{f, g_0} (1-\phi)  \rightarrow 1 - \Phi(D) + \Phi(D - \|L \mathbf{f}_1\|_2/2).
+$$
+Minimising this with respect to $D$ gives $D = \|L \mathbf{f_1}\|_2/4$ and using the bound $1 - \Phi(x) \leq e^{-x^2/2}$ for $x \geq 0$, finally the tests satisfy
+$$
+P^{(n)}_{f_0, g_0} \phi + \sup_{f : \|f - f_1\|_{L, n, 2} < \eps/2} P^{(n)}_{f, g_0} (1-\phi) \leq e^{-\|L\mathbf{f}_1\|_2^2/8}.
+$$
+The condition on the concentration function allows the construction of sets $B_n$ satisfying conditions (8.31), (8.32) and (8.33) of Theorem 8.26 in \cite{FNBI} and the result follows.
+\end{proof}
+
+\begin{proof}{Proof of Proposition \ref{prop:g0_control_FDBM}}
+Splitting the sum into indices smaller and larger than $\sqrt{nc_n}$ respectively, we have the following:
+\begin{align*}
+	\sum_{j = 1}^n\frac{\lambda_j}{1+\lambda_j} \mathcal{G}[g_0](j \pi)^2 &= \sum_{j = 1}^{\sqrt{nc_n}} \frac{n c_n}{j^2 + nc_n} \mathcal{G}[g_0](j \pi)^2 + \sum_{j = \sqrt{nc_n} + 1}^{n} \frac{n c_n}{j^2 + nc_n} \mathcal{G}[g_0](j \pi)^2\\
+&< \sum_{j = 1}^{\sqrt{nc_n}}  \mathcal{G}[g_0](j \pi)^2 + n c_n \sum_{j = \sqrt{nc_n} + 1}^{n} \frac{1}{j^2 } \mathcal{G}[g_0](j \pi)^2
+\end{align*}
+
+Splitting the sums again, and this time using that $j^2 + nc_n < 2nc_n$ for $j < \sqrt{nc_n}$ (and $j^2 + nc_n < 2j^2$ for $j > \sqrt{nc_n}$), we have the following lower bound:
+\begin{align*}
+	\sum_{j = 1}^n\frac{\lambda_j}{1+\lambda_j} \mathcal{G}[g_0](j \pi)^2 &= \sum_{j = 1}^{\sqrt{nc_n}} \frac{n c_n}{j^2 + nc_n} \mathcal{G}[g_0](j \pi)^2 + \sum_{j = \sqrt{nc_n} + 1}^{n} \frac{n c_n}{j^2 + nc_n} \mathcal{G}[g_0](j \pi)^2\\
+&> \frac{1}{2} \sum_{j = 1}^{\sqrt{nc_n}}  \mathcal{G}[g_0](j \pi)^2 + \frac{1}{2} n c_n \sum_{j = \sqrt{nc_n} + 1}^{n} \frac{1}{j^2 } \mathcal{G}[g_0](j \pi)^2
+\end{align*}
+Thus, we have
+$$
+\|g_0\|_{L, n, 2}^2 \asymp \sum_{j = 1}^{\sqrt{nc_n}}  \mathcal{G}[g_0](j \pi)^2 + n c_n \sum_{j = \sqrt{nc_n} + 1}^{n} \frac{1}{j^2 } \mathcal{G}[g_0](j \pi)^2.
+$$
+Using the assumptions in the proposition and the asymptotic equality $\sum_{j = m + 1}^\infty j^{-1-\alpha} \asymp m^{-\alpha}$, we can show that $\|g_0\|_{L, n, 2}^2 \lesssim (nc_n)^{-\alpha}$.	
+\end{proof}
+
+\section{Results for the sparse Bayesian prior ignoring confounding effect}
+Here we discuss what results can be derived for the sparse prior (where no attempt is made to remove confounding) when there is in fact confounding in the data. We provide results similar to \cite{CS-HV2015}, with additional terms that arise from the presence of confounding. Our first result concerns the dimension of the model.
+
+\begin{theorem}[Dimension with no deconfounding]\label{thm:dimension_no_deconfounding}
+	Suppose that {\color{assumption} $\lambda$ satisfies  (2.1) and $\pi_p$ satisfies (2.2)} (both from \cite{CS-HV2015}). Then for any $M > 2$
+$$
+	\sup_{\beta^0} \Pi\left(\beta: |S_\beta| > |S_0|\left(1 + \frac{M}{A_4}\left[1 + \frac{16}{\phi(S_0)^2}\frac{\lambda}{\bar{\lambda}} \right]\right)  + \frac{8M}{A_4}\frac{\lambda}{\bar{\lambda}} \|X\|^2\|Xb^0\|_2^2  \big| X, Y \right) \rightarrow 0.
+$$
+\end{theorem}
+Theorem \ref{thm:dimension_no_deconfounding} says that the posterior is supported on sets of dimension smaller than the bound given in the result. This bound consists of the bound for the dimension with no confounding (first term), plus an additional term which gets larger as the confounding becomes more pronounced. 
+
+If the confounding is small enough, then the posterior will contract on sets of the same dimension as if there was no deconfounding. This is surprising at first, as the model can only identify $\beta + b$, where $b$ is dense. However we emphasise that this is only true if the confounding is small enough - in which case the individual components of $b$ (hence $\beta + b$) will be very small, and likely below the threshold for selection quantified in Theorem 5 of \cite{CS-HV2015}. 
+
+We have a similar result for the recovery rates, which consist of the usual bounds with no confounding plus some additional terms which depend on the size of the confounding.
+
+
+\begin{theorem}[Recovery with no deconfounding]
+	Suppose that $\lambda$ satisfies {\color{assumption} (2.1) and $\pi_p$ satisfies (2.2)} (both from \cite{CS-HV2015}). Then for sufficiently large $M$,
+\begin{align*}
+	\sup_{\beta^0} \Pi\left(\beta: \|X(\beta - \beta^0)\|_2 > \frac{M}{\bar{\psi}(S_0)} \frac{\sqrt{|S_0|\log p}}{\phi(S_0)}  + \|Xb^0\|_2\left(1 + \frac{\lambda}{\bar{\lambda}}\|X\|^2\right)^{1/2}| X, Y \right) &\rightarrow 0, \\
+		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_1 > \frac{M}{\bar{\psi}(S_0)^2} \frac{|S_0|\sqrt{\log p}}{\|X\|\phi(S_0)^2}  + \|Xb^0\|_2^2\left(\frac{1}{\bar{\lambda}} + \frac{\lambda}{\bar{\lambda}^2}\|X\|^2\right) | X, Y \right) &\rightarrow 0, \\
+		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_2 > \frac{M}{\tilde{\psi}(S_0)^2} \frac{\sqrt{|S_0|\log p}}{\|X\|\phi(S_0)}  + \frac{\|Xb^0\|_2}{\tilde{\psi}(S_0)}\left(\frac{1}{\|X\|^2} + \frac{\lambda}{\bar{\lambda}}\right)^{1/2} | X, Y \right) &\rightarrow 0.
+\end{align*}
+\end{theorem}
+In general, these results provide an upper bound on the rate of contraction in terms of the bound when there is no confounding and an extra term which depends on the confounding effect. They are intended to show that when one ignores confounding and uses the same method of proof, extra terms arise which were not there before --- they do {\it not} say that the rate of contraction is worse, for which we would require a {\it lower bound} on the rate of contraction. In order to see that the confounding effect really does affect the rate (and existence) of contraction, it is easier to look at the empirical performance in Section \ref{sect:simulations}, where we see that the SAS does not appear to contract to the truth when there are confounding variables.
+
+\subsection{Proofs for this section}
+\begin{proof}{Proof of Theorem \ref{thm:dimension_no_deconfounding}}
+The proof can proceed largely as in \cite{CS-HV2015}, though right at the beginning we write now $\T_0 := \{\|X^T \eps\|_\infty \leq \bar{\lambda}\}$. Again, this is the same event as described in \cite{CS-HV2015} but we have had to change the definition in light of the new model \eqref{eq:perturbed_lm}.
+
+We have as in \cite{CS-HV2015}
+\begin{align*}
+\Pi(B | Y) \mathbb{I}_{\T_0} \leq \frac{ep^{2s_0}}{\pi_p(s_0)}e^{\lambda\|\bezero\|_1} \int_B e^{-\frac{1}{2}\|X(\beta - \bezero)\|_2^2 + (Y - X \bezero)^T X(\beta - \bezero) }d\Pi(\beta).
+\end{align*}
+Next we must make the following change to Equation (6.5). We have on $\T_0$,
+\begin{align*}
+	(Y-X\beta^0)^TX(\beta - \beta^0) &\leq \eps^T X(\beta - \beta^0)+(Xb^0)^TX(\beta - \beta^0) \\
+	&\leq \bar{\lambda}\|\beta - \beta^0\|_1 + \langle Xb^0, X(\beta - \beta^0)\rangle_2 \\
+	&\leq \bar{\lambda}\|\beta - \beta^0\|_1 + \|Xb^0\|_2 \|X(\beta - \beta^0)\|_2 =: L(\beta),
+\end{align*} 
+The expectation with respect to $\beta^0$ on $\T_0$ is thus bounded by
+\begin{align*}
+&e^{-\frac{1}{2} \|X(\beta - \bezero)\|_2^2}	E_{0}\left[ e^{(1-\frac{\lambda}{2\bar{\lambda}})(Y - X \bezero)^T X(\beta - \bezero)}\right]e^{\frac{\lambda}{2\bar{\lambda}}L(\beta)} \\
+=& e^{-\frac{1}{2} \|X(\beta - \bezero)\|_2^2}e^{(1-\frac{\lambda}{2\bar{\lambda}})\|Xb^0\|_2 \|X(\beta - \bezero)\|_2}e^{-\frac{1}{2}(1-\frac{\lambda}{2\bar{\lambda}})^2\|X\beta - \bezero\|_2^2}e^{\frac{\lambda}{2\bar{\lambda}}L(\beta)} \\
+\leq & e^{\|Xb^0\|_2 \|X(\beta - \bezero)\|_2} e^{-\frac{1}{2} (1 - (1 - \frac{\lambda}{\bar{\lambda}} + \frac{\lambda^2}{4\bar{\lambda}^2}))\|X(\beta - \bezero)\|_2^2}e^{\frac{\lambda}{2}\|\beta - \bezero\|_1} \\
+\leq & e^{\|Xb^0\|_2 \|X(\beta - \bezero)\|_2} e^{-\frac{\lambda}{4\bar{\lambda}}\|X(\beta - \bezero)\|_2^2}e^{\frac{\lambda}{2}\|\beta - \bezero\|_1} 
+\end{align*} 
+
+We adapt the approach of \cite{CS-HV2015} to deal with the additional term from $b^0$:
+\begin{align*}
+\|\beta^0\|_1 + \frac{1}{2}\|\beta - \bezero\|_1 
+&\leq\frac{1}{4 \bar{\lambda}}\|X(\beta - \bezero)\|_2^2 - \frac{1}{\lambda}\|Xb^0\|_2\|X(\beta - \bezero)\|_2\\ &+  \bar{\lambda	} \underbrace{ \left(\frac{2s_0^{1/2}}{\|X\|\phi(S_0)}+ \frac{\|Xb^0\|_2}{\lambda} \right)^2}_{=: t_0^2} - \frac{1}{4}\|\beta - \bezero\|_1 + \|\beta\|_1.
+\end{align*}
+Giving,
+\begin{align}
+	E_0 \left(\Pi(B | Y) \mathbb{I}_{\T_0} \right) \leq \frac{ep^{2s_0}}{\pi_p(s_0)} e^{\lambda\bar{\lambda}t_0^2}\int_B 
+	e^{-\frac{\lambda}{4}\|\beta - \beta^0\|_1 + \lambda\|\beta\|_1} d\Pi(\beta),
+\end{align}
+The rest of the proof follows as in \cite{CS-HV2015}, observing that 
+$$t_0^2 \leq \frac{8s_0}{\|X\|^2\phi(S_0)^2} +  2\frac{\|Xb^0\|_2^2}{\lambda^2} 
+$$	
+\end{proof}
+
+
+
+
+
+
+%\section{Extra Notes}
+%The likelihood is now defined by:
+%\begin{equation}
+%	Y = X\beta + Xb + \eps. \label{eq:bayesian_lm_with_pert}
+%\end{equation}
+%Of central concern to the proofs of \cite{CS-HV2015} is the likelihood ratio:
+%\begin{align}
+%	\Delta_{n, \beta, \beta^0}(Y) = \frac{p_{n, \beta}}{p_{n, \beta^0}}(Y) = \exp\left\{-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + (Y - X\beta^0)X(\beta - \beta^0)\right\},
+%\end{align}
+%in the setup for \eqref{eq:bayesian_lm}. With the likelihood now defined by \eqref{eq:bayesian_lm_with_pert}, we get the new likelihood ratio:
+%\begin{align*}
+%	\Delta_{n, \beta, \beta^0, b, b^0}(Y) = \frac{p_{n, \beta, b}}{p_{n, \beta^0, b^0}}(Y) = \exp\Big\{&-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + \eps^TX(\beta - \beta^0) \\
+%{\color{ared} -\langle X(\beta - \beta^0), X(b - b^0)  \rangle_2	}&-\frac{1}{2}\|X(b - b^0)\|_2^2 + \eps^TX(b - b^0) \Big\},
+%\end{align*}
+%which, as expected from \eqref{eq:bayesian_lm_with_pert} is symmetric in $(\beta, b)$ and $(\beta^0, b^0).$ The term in {\color{ared} red} means that even if the priors on $\beta$ and $b$ are independent, the posteriors will not be independent. However, we may want to consider the following to get some inspiration for how to choose the prior on $b$. One of the first things we wish to do is bound the denominator in the posterior form below. We have 
+%\begin{align*}
+%\int \Delta_{n, \beta, \beta^0, b, b^0}(Y) d\Pi(\beta, b) &=  \\
+%\int 	e^{-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + \eps^TX(\beta - \beta^0)}  &\left[\underbrace{\int e^{ -\langle X(\beta - \beta^0), X(b - b^0)  \rangle_2	 -\frac{1}{2}\|X(b - b^0)\|_2 ^2 + \eps^TX(b - b^0)} d\Pi(b | \beta)}_{=:I(\beta)}\right] d\Pi(\beta).
+%\end{align*}
+%We write $\Pi(b | \beta)$ to reserve the possibility of placing a hierarchical prior on $(b, \beta)$, but we may also place an independent prior on $b$. The integrand of $I(\beta)$ has a Gaussian form, and so placing a Gaussian prior on $b$ will allow us to compute $I(\beta)$ exactly.
+%
+%For simplicity of notation, write $\vbeta = X(\beta - \beta_0)$. Place a prior on $u = b - b_0$ which is Gaussian $N(\mu, \Sigma)$ (equivalent to placing a prior $N(\mu + b_0, \Sigma)$ on $b$). We have,
+%\begin{align*}
+%	 & \int e^{ -\langle X(\beta - \beta^0), Xu  \rangle_2	 -\frac{1}{2}\|Xu\|_2 ^2 + \eps^TXu} d\Pi(b | \beta) \\
+%	=& \frac{1}{Z_1}\int e^{ -\langle X^T\vbeta, u  \rangle_2	 -\frac{1}{2}\|Xu\|_2 ^2 + \eps^T Xu - \frac{1}{2}(u - \mu)^T\Sigma^{-1}(u - \mu^T)} du \\
+%	=& \frac{1}{Z_1} \int e^{ - u^T X^T \vbeta 	 -\frac{1}{2}u^T(X^TX)u + u^TX^T\eps - \frac{1}{2}u^T\Sigma^{-1}u + u^T\Sigma^{-1} \mu - \frac{1}{2}\mu^T\Sigma^{-1}\mu} d u \\
+%	=& \frac{1}{Z_1} e^{-\frac{1}{2}\mu^T \Sigma^{-1}\mu} \int e^{-\frac{1}{2}u^T((X^TX) + \Sigma^{-1})u + u^T(X^T\eps + \Sigma^{-1}\mu -X^T\vbeta)} du \\
+%	=& \frac{1}{Z_1} e^{-\frac{1}{2}\mu^T \Sigma^{-1}\mu} \int \exp\left\{-\frac{1}{2}u^T\underbrace{((X^TX) + \Sigma^{-1})}_{\postCov ^{-1}}u + u^T\underbrace{(X^T\eps + \Sigma^{-1}\mu -X^T\vbeta)}_{\postCov ^{-1}\mu_p}\right\} du \\
+%	=& \frac{Z_2}{Z_1} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)} \int e^{-\frac{1}{2}(u - \mu_p)^T\postCov ^{-1}(u - \mu_p)}/Z_2  du \\
+%	=& \frac{Z_2}{Z_1} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)} = \sqrt{\frac{|\postCov |}{|\Sigma|}}e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)},
+%\end{align*}
+%where $Z_1 = (2\pi)^{p/2}|\Sigma|^{1/2}$ and $Z_2 = (2\pi)^{p/2}|\postCov |^{1/2}$ are the appropriate normalisation constants for the Gaussian densities. Given this setup we have,
+%\begin{align*}
+%\int \Delta_{n, \beta, \beta^0, b, b^0}(Y) d\Pi(\beta, b) = 
+%{\color{ared} \sqrt{\frac{|\postCov |}{|\Sigma|}}} \int 	e^{-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + \eps^TX(\beta - \beta^0)} {\color{ared} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)}}  d\Pi(\beta),	
+%\end{align*}
+%with,
+%\begin{align*}
+%	\postCov  &= (X^TX + \Sigma^{-1})^{-1}, \\
+%	\mu_p &= \postCov (X^T\eps + \Sigma^{-1}\mu - X^TX(\beta - \beta_0)),
+%\end{align*}
+%the question is, can we choose $\mu$ and $\Sigma$ in a sensible way so that the impact of the {\color{ared} red} terms is small?
+%
+%Inspired by the spectral transformation proposed by \cite{CBM2020}, we start by looking at the SVD of $X$. Write $r = \textrm{rank}(X)$, and $X = UDV^T$, where $U \in \mathbb{R}^{n \times r}$, $D \in \R^{r \times r}$ and $V \in \R^{ p \times r}$. $D$ is diagonal, so we may write $D = \textrm{diag}(\sqrt{\lambda_1}, \dots, \sqrt{\lambda_r})$, with $\{\sqrt{\lambda_i}\}$ the singular values of $X$. The columns of $U$ are orthonormal, spanning the  column space of $X$, and the columns of $V$ are orthonormal, spanning the row space of $X$. This representation gives, 
+%$$
+%X^TX = V D^2 V^T = V \textrm{diag}(\lambda_1, \dots, \lambda_r) V^T = \sum_{k = 1}^r \lambda_k \mathbf{v}_k \mathbf{v}_k^T.
+%$$
+%One recalls the intuition behind the transformation $\tilde{F}$ proposed by \cite{CBM2020}: it seems to be the case in the confounding model that $b$ approximately lies in the span of the first few singular vectors (see Figure 3.1 of \cite{CBM2020}), thus one applies the transform which takes $FX = U\tilde{D}V^T$, which results in shrinkage of the confounding term $\tilde{X}b$ without shrinking the signal $\tilde{X}\beta$. It thus seems natural to relate the shape of the prior on $b$, $\Sigma$, to the singular values and singular vectors of $X$, $\{\lambda_k, \mathbf{v}_k\}_{k=1}^r$. We need $\Sigma$ to be full rank so that is is invertible, so extend $\{\mathbf{v}_1, \dots, \mathbf{v}_r\}$ to a basis $\{\mathbf{v}_1, \dots, \mathbf{v}_r, \mathbf{v}_{r+1}, \dots, \mathbf{v}_p\}$ of $\R^p$ and define
+%$$
+%\Sigma := \sum_{k = 1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T,
+%$$
+%for some $\varphi_k > 0$. As \cite{CBM2020} make $\tilde{X}b$ small by shrinking the leading singular values of $X$, can we do a similar thing in a Bayesian fashion by making the shape of the prior `small' in the leading singular vectors of $X$?
+%
+%We can write
+%$$
+%\postCov  = \sum_{k = 1}^r (\lambda_k + \varphi_k^{-1})^{-1} \mathbf{v}_k \mathbf{v}_k^T + \sum_{k = r+1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T.
+%$$
+%We now have the following expressions: 
+%\begin{align*}
+%	X \postCov  X^T &= UDV^T\left[\sum_{k= 1}^r(\lambda_k+ \varphi_k^{-1})^{-1}\mathbf{v}_k\mathbf{v}_k^T\right] VDU^T = \sum_{k=1}^r \frac{\lambda_k}{\lambda_k + \varphi_k^{-1}}\mathbf{u}_k\mathbf{u}_k^T, \\
+%	\Sigma^{-1}\postCov  \Sigma^{-1} &= \sum_{k = 1}^r \frac{1}{\varphi_k(\varphi_k \lambda_k + 1)} \mathbf{v}_k \mathbf{v}_k^T + \sum_{k = r+1}^p \frac{1}{\varphi_k} \mathbf{v}_k \mathbf{v}_k^T, \\
+%	\Sigma^{-1}\postCov  X^T &= V\textrm{diag}\left(\frac{\sqrt{\lambda_k}}{\varphi_k\lambda_k+1} \right) U^T,
+%\end{align*}
+%which is useful because we can write
+%\begin{align}
+%	&\mu_p^T \postCov ^{-1} \mu_p = \left[X^T \eps + \Sigma^{-1}\mu - X^T \mathbf{v}_\beta \right]^T \postCov  \left[X^T \eps + \Sigma^{-1}\mu - X^T \mathbf{v}_\beta \right] \\
+%	&= (\eps - \mathbf{v}_\beta)^T X\postCov  X^T(\eps - \mathbf{v}_\beta) + \mu^T \Sigma^{-1}\postCov  \Sigma^{-1}\mu + 2\mu^T\Sigma^{-1}\postCov X^T(\eps - \mathbf{v}_\beta). 
+%\end{align}
+%
+
+%\subsection{Chernozukhov posterior}
+%To further illustrate the possible connection, consider a prior $\Pi(\beta, b) = \Pi(\beta)\cdot \Pig(b)$ under which $\beta$ and $b$ are independent. In particular suppose that the prior on $b$ is a $p-$dimensional isotropic Gaussian, $\mathcal{N}_p(0, \frac{1}{n\lambda_2}I_p)$. Then the posterior distribution of $b$ given $X, Y$ and $\beta$:
+%\begin{align*}
+%	\Pi(b | X, Y, \beta) \propto L(b | X, Y, \beta) \cdot \Pi(\beta) 
+%	&\propto \exp\left\{-\frac{1}{2}\|Y - X\beta - Xb\|_2^2 -\frac{n\lambda_2}{2}\|b\|_2^2 \right\}\\
+%	&\propto \exp\left\{-\frac{1}{2}\left(b^T X^TX b + n\lambda_2b^Tb - 2b^T X^T(Y - X\beta) \right) \right\} \\
+%	&\propto \exp\left\{-\frac{1}{2}\left(b^T \underbrace{(X^TX + n\lambda_2 I_p)}_{\postCov ^{-1}} b - 2b^T\underbrace{ X^T(Y - X\beta)}_{\postCov ^{-1} \bar{b}} \right) \right\} \\
+%	&\propto \exp\left\{-\frac{1}{2}(b - \bar{b})^T\postCov ^{-1}(b - \bar{b}) \right\},
+%\end{align*}
+%so that $\Pi(b | X, Y, \beta)$ is a $p-$dimensional Gaussian with mean and covariance
+%\begin{align}
+%	\bar{b} | X, Y, \beta &= (X^TX + n\lambda_2I_p)^{-1} X^T(Y-X\beta), \label{eq:post_mean_b}\\
+%	\postCov  | X, Y, \beta &= (X^TX + n\lambda_2I_p)^{-1}. \nonumber
+%\end{align}
+%One notes that no matter the prior given to $\beta$, Equation \eqref{eq:post_mean_b} for the posterior mean of $b | \beta$ matches the expression for the Lava estimate of $b | \hat{\beta}$ given in Equation \eqref{eq:b_sol_chern}.
+%
+%
+%\subsection{The prior choice which gives the trim transform (cases where $\varphi_k = 0$)}
+%Choosing $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k \mathbf{v}_k^T$ with  $\varphi_k = \left(\frac{\lambda_k}{\tau^2} - 1\right)/\lambda_k$ if $\lambda_k > \tau^2$ and $\varphi_k = 0$ for $0 < \lambda_k \leq \tau^2$ recovers the trim transform proposed in \cite{CBM2020}. If any $\varphi_k = 0$ (i.e. any $0 < \lambda_k \leq \tau^2$, which will always be the case for $\tau = \lambda_{\lfloor p/2 \rfloor}$), the prior covariance matrix $\Sigma$ is not positive definite, and we can not compute $\Sigma^{-1}$ or $\postCov $ as we have above. However, it turns out that if we are more careful with the computation of $LX$ and integrate out the singular directions of $\Sigma$, everything works out as before.
+%
+%The prior $\Pi(b) \sim \N_p(0, \Sigma)$, with $\Sigma = \sum_{k = 1}^p \varphi_k \mathbf{v}_k\mathbf{v}_k^T$ is equivalent to placing a prior on the vector $V^T b$ given by
+% $$
+% \bigotimes_{k = 1}^p \mathbb{I}_{\varphi_k > 0} \N(0, \sigma^2 = \varphi_k) + (1-\mathbb{I}_{\varphi_k > 0})\delta_0,
+% $$ 
+% for $\delta_0$ the Dirac mass at 0. Recalling $X = UDV^T$ and writing $\Phi = \diag (\varphi_k)$, $V_> = (\mathbf{v}_k : \varphi_k > 0)$, $U_> = (\mathbf{u}_k : \varphi_k > 0)$, $D_> = \diag(\sqrt{\lambda_k} : \varphi_k > 0)$, $\Phi_> = \diag(\varphi_k : \varphi_k > 0)$
+% We then get the following computation:
+% \begin{align}
+%	 \int L(b |\beta, Y) d\Pig(b) &= \int_{\R^p} \exp \left\{-\frac{1}{2}\|Xb\|_2^2 + \langle Y - X\beta, Xb \rangle_2 \right\} d\Pig(b) \nonumber\\
+%	 &= \int_{\R^p} \exp \left\{-\frac{1}{2} (V^Tb)^T D^2 (V^Tb) + (V^Tb)^T D U^T(Y - X\beta) \right\} d\Pig(b)\ \nonumber \\
+%	 &=\int_{\R^p_>} \exp \left\{-\frac{1}{2} (V_>^Tb)^T (D_>^2 + \Phi_>^{-1}) (V_>^Tb) + (V_>^Tb)^T D_> U_>^T(Y - X\beta)  \right\}d (\mathbf{V}_>^Tb)/Z \label{eq:low_rank_projection}\\ 
+%	 &= \exp\left\{ \frac{1}{2} (Y - X\beta)^T\left[U_>D_>(\Lambda_> + \Phi_>^{-1})^{-1}D_>U_>^T\right](Y-X\beta )\right\} /Z \nonumber \\
+%	 &= \exp\left\{ \frac{1}{2} (Y - X\beta)^T U \diag\left(\frac{\varphi_k \lambda_k}{1+\varphi_k \lambda_k}\right) U^T (Y-X\beta )\right\} /Z, \label{eq:high_rank_projection}
+% \end{align}
+% where $Z$ is a normalising constant.
+%In Equation \eqref{eq:low_rank_projection}, we project onto $\R_>^p := \textrm{Span}\{\mathbf{v}_k : \varphi_k > 0\}$, observing that the integral over the remaining space is given by 1. In Equation \eqref{eq:high_rank_projection}, we reintroduce the space $\textrm{Span}\{\mathbf{v}_k: \varphi_k = 0\}$ by observing that $\varphi_k \lambda_k/(1+\varphi_k \lambda_k) = 0$ for these coordinates. This finally allows us to write:
+%
+%\begin{align*}
+%	\Pi(B \times \R^p | Y) = \frac{\int_B e^{-\frac{1}{2}\|L(Y - X\beta)\|_2^2} d\Pi(\beta) }{\int e^{-\frac{1}{2}\|L(Y - X\beta)\|_2^2} d\Pi(\beta)},
+%\end{align*}
+%where
+%\begin{align*}
+%	L &= \sum_{k = 1}^r \frac{1}{\sqrt{1+\varphi_k \lambda_k}}\mathbf{u}_k\mathbf{u}_k^T + \sum_{k = r+1}^p \mathbf{u}_k\mathbf{u}_k^T\\
+%	LX &= \sum_{k = 1}^r \sqrt{\frac{\lambda_k}{1+\varphi_k \lambda_k}}\mathbf{u}_k\mathbf{v}_k^T = \sum_{k = 1}^r \sqrt{\min(\lambda_k, \tau^2)}\mathbf{u}_k\mathbf{v}_k^T,
+%\end{align*}
+%which one recognises as the trim transform.
+%We observe that the form of $L$ does not depend on the choices of $\varphi_k$ for $k > r$ (i.e. the prior variance in directions outside of the column space of $X$).
+%%
+%
+%\subsection*{What happens when the Bayesian ignores the confounding?}
+%Here we consider what happens when we use the Bayesian approach of \cite{CS-HV2015} with the data generated according to \eqref{eq:perturbed_lm} with $\beta = \beta^0$ and $b = b^0$. In this setting we assume that the Bayesian considers a likelihood from the model with no confounding:
+%\begin{equation}
+%	Y = X\beta + \eps, \label{eq:bayesian_lm}
+%\end{equation}
+%and look at the effect $b^0$ has on the posterior given the prior $\Pi(\beta)$.
+%We will illustrate below the effect that $b^0$ has on the proofs of the essential Theorems, and detail the additional assumptions required to make sure that the Bayesian approach still works.
+%\subsubsection*{Lemma 4}
+%The wording of Lemma 4 must change, though the result stays the same. We would now want to state this as:
+%$$
+%P_0\left(\|X^T \eps\|_\infty > 2\sqrt{\log p}\|X\| \right) \leq \frac{2}{p},
+%$$
+%which is actually the same statement as in \cite{CS-HV2015}, but since we have changed the `true' model here to be given by \eqref{eq:perturbed_lm} the statement must change.
+%\subsubsection*{Proof of Theorem 10}
+%The proof of Theorem 10 can proceed largely as normal. Though right at the beginning we write now $\T_0 := \{\|X^T \eps\|_\infty \leq \bar{\lambda}\}$. Again, this is the same event as described in \cite{CS-HV2015} but we have had to change the definition in light of the new model \eqref{eq:perturbed_lm}.
+%
+%Next we must make the following change to Equation (6.5). We have on $\T_0$,
+%\begin{align*}
+%	(Y-X\beta^0)^TX(\beta - \beta^0) &\leq \eps^T X(\beta - \beta^0)+(Xb^0)^TX(\beta - \beta^0) \\
+%	&\leq \bar{\lambda}\|\beta - \beta^0\|_1 + \langle Xb^0, X(\beta - \beta^0)\rangle_2.
+%\end{align*} 
+%Proceeding as in \cite{CS-HV2015} but carefully keeping track of the second term in the last display, eventually we end with the bound
+%\begin{align}
+%	E_0 \left(\Pi(B | Y) \mathbb{I}_{\T_0} \right) \leq \frac{ep^{2s_0}}{\pi_p(s_0)} e^{\frac{8s_0 \bar{\lambda} \lambda}{\|X\|^2 \phi(S_0)^2}}\int_B & {\color{ared} e^{-\frac{\lambda}{8\bar{\lambda}}\|X(\beta - \beta^0)\|_2^2 + \langle X b^0, \, X(\beta - \beta^0) \rangle_2}} \times\\
+%	&e^{-\frac{\lambda}{4}\|\beta - \beta^0\|_1 + \lambda\|\beta\|_1} d\Pi(\beta),
+%\end{align}
+%where the term in {\color{ared} red} previously did not exist (the first part of the term actually does exist: however one can remove it with the benefit of getting a smaller constant in the exponential before the integral --- 4 instead of 8). Without additonal assumptions it is difficult to remove this term from the calculation.
+%
+% However, if we consider the spectral deconfounding given by \cite{CBM2020} with the `deconfounded model' $\tilde{Y} = FY$, $\tilde{X} = FX$, we end up with the same terms, with $X$ replaced by $\tilde{X}$. One can show that the term in {\color{ared} red} is bounded by $1$ given the assumptions {\it (A1)} and {\it (A2)} made in \cite{CBM2020}. We have
+%\begin{align*}
+%	-\frac{\lambda}{8\bar{\lambda}}\|\tilde{X}(\beta - \beta^0)\|_2^2 + \langle \tilde{X}b^0, \tilde{X}(\beta - \beta^0)\rangle_2 &\leq  -\frac{\lambda}{8\bar{\lambda}}\|\tilde{X}(\beta - \beta^0)\|_2^2 +\|\tilde{X}b^0\|_2\|\tilde{X}(\beta - \beta^0)\|_2 \\
+%	&\leq -\left( \frac{\lambda}{8\bar{\lambda}}\|\tilde{X}(\beta - \beta^0)\|_2 -\|\tilde{X}b^0\|_2 \right)\|\tilde{X}(\beta - \beta_0)\|_2,
+%\end{align*}
+%which is less than 0 if $\frac{\lambda}{8\bar{\lambda}}\|\tilde{X}(\beta - \beta^0)\|_2 -\|\tilde{X}b^0\|_2 > 0$. Under {\it (A1)} and {\it (A2)}, we have that $\|Xb^0\|_2 = O_p(\sigma),$ and so we expect this term to be controlled under reasonable assumptions. Once this term is controlled the proof continues easily, giving the following result.
+%$$ 
+%\hspace{0.98\linewidth} \Box
+%$$
+%\begin{theorem}[Dimension]
+%	Suppose that {\color{assumption} $\lambda$ satisfies  (2.1) and $\pi_p$ satisfies (2.2)} (both from \cite{CS-HV2015}). Suppose additionally that {\color{assumption} $\Gamma$ satisfies (A1) and $F$ satisfies (A2)} (both from \cite{CBM2020}). Then for any $M > 2$,
+%$$
+%	\sup_{\beta^0} \Pi\left(\beta: |S_\beta| > |S_0|\left(1 + \frac{M}{A_4}\left[1 + \frac{16}{\phi(S_0)^2}\frac{\lambda}{\bar{\lambda}} \right]\right) | \tilde{X}, \tilde{Y} \right) \rightarrow 0.
+%$$
+%\end{theorem}
+%
+%\subsubsection*{Proof of Theorem 2}
+%We now turn to the recovery result. Again, the proof can proceed largely as it does in \cite{CS-HV2015}, but the perturbation adds some difficulty once we get to Equation (6.10) of \cite{CS-HV2015}. This becomes
+%$$
+%\Pi(B | Y) \mathbb{I}_{\T_0} \leq \frac{ep^{2s_0}}{\pi_p(s_0)}e^{\frac{16 \bar{\lambda}^2(D_0 + s_0)}{\|X\|^2 \bar{\psi}(S_0)^2}} \int_B e^{-\frac{1}{4}\|X(\beta - \beta^0)\|_2^2 - \bar{\lambda}\|\beta - \beta^0\|_1 {\color{ared} + \langle X b^0, \, X(\beta - \beta^0) \rangle_2} + \lambda\|\beta\|_1} d\Pi(\beta),
+%$$
+%where the term in {\color{ared} red} is new. We consider again the event $B = \{\beta : \|X(\beta - \beta^0)\|_2 > R\}$, giving us
+%\begin{align*}
+%\Pi(B | Y) \mathbb{I}_{\T_0} &\leq \frac{ep^{2s_0}}{\pi_p(s_0)}e^{\frac{16 \bar{\lambda}^2(D_0 + s_0)}{\|X\|^2 \bar{\psi}(S_0)^2}} e^{-\frac{1}{4}R^2 {\color{ared}+ R\| X b^0\|_2}} \int_B e^{- \bar{\lambda}\|\beta - \beta^0\|_1 + \lambda\|\beta\|_1} d\Pi(\beta) \\
+%&\lesssim p^{(2+A_3)s_0} A_1^{-s_0} e^{\frac{16 \bar{\lambda}^2(D_0 + s_0)}{\|X\|^2 \bar{\psi}(S_0)^2}} e^{-\frac{1}{4}R^2 {\color{ared}+ R\| X b^0\|_2}}.
+%\end{align*}
+%{\color{red} (The first inequality above is true - but it is not trivial and so perhaps needs further explanation).} \\
+%For
+%\begin{align}
+%	\frac{1}{4}R^2 - R\|Xb^0\|_2 > (3+A_3)s_0\log p + \frac{16 \bar{\lambda}^2(D_0 + s_0)}{\|X\|^2 \bar{\psi}(S_0)^2},
+%\end{align}
+%this goes to 0. The RHS is asymptotically bounded by $\frac{(D_0 + s_0) \log p}{\bar{\psi}(S_0)^2}$. So one can show by considering the quadratic equation that this is satisfied for
+%$$
+%R > 2\|Xb^0\|_2 + \sqrt{4\|Xb^0\|_2^2 + \frac{(D_0 + s_0) \log p}{\bar{\psi}(S_0)^2}}.
+%$$
+%If one assumes {\it (A1)} and {\it (A2)} then we can write this explicitly,
+%$$
+%R > \sqrt{s_0 \log p} + \frac{\sqrt{(D_0 + s_0)\log p}}{\bar{\psi}(S_0)},
+%$$
+%which will give the following result.
+%$$
+%\hspace{0.98\linewidth}\Box
+%$$
+%
+%
+%\begin{theorem}[Recovery]
+%	Suppose that $\lambda$ satisfies {\color{assumption} (2.1) and $\pi_p$ satisfies (2.2)} (both from \cite{CS-HV2015}). Suppose additionally that {\color{assumption} $\Gamma$ satisfies (A1) and $F$ satisfies (A2)} (both from \cite{CBM2020}). Then for sufficiently large $M$,
+%\begin{align*}
+%	\sup_{\beta^0} \Pi\left(\beta: \|X(\beta - \beta^0)\|_2 > \frac{M}{\bar{\psi}(S_0)} \frac{\sqrt{|S_0|\log p}}{\phi(S_0)} | \tilde{X}, \tilde{Y} \right) &\rightarrow 0, \\
+%		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_1 > \frac{M}{\bar{\psi}(S_0)^2} \frac{|S_0|\sqrt{\log p}}{\|X\|\phi(S_0)^2} | \tilde{X}, \tilde{Y} \right) &\rightarrow 0, \\
+%		\sup_{\beta^0} \Pi\left(\beta: \|\beta - \beta^0\|_2 > \frac{M}{\tilde{\psi}(S_0)^2} \frac{\sqrt{|S_0|\log p}}{\|X\|\phi(S_0)} | \tilde{X}, \tilde{Y} \right) &\rightarrow 0,
+%\end{align*}
+%	for $\tilde{X} = FX, \tilde{Y} = FY$.
+%\end{theorem}
+
+
+% For simplicity of notation, write $\vb = X(b - b_0)$ and $\vbeta = X(\beta - \beta_0)$. Assume that the prior on $b$ induces a prior on $v_b$ which is Gaussian $N(\mu, \Sigma)$. We have,
+%\begin{align*}
+%	 & \int e^{ -\langle X(\beta - \beta^0), X(b - b^0)  \rangle_2	 -\frac{1}{2}\|X(b - b^0)\|_2 ^2 + \eps^TX(b - b^0)} d\Pi(b | \beta) \\
+%	=& \int e^{ -\langle \vbeta, \vb  \rangle_2	 -\frac{1}{2}\|\vb\|_2 ^2 + \eps^T\vb} d\Pi(v_b) \\
+%	=& \frac{1}{Z_1} \int e^{ -\langle \vbeta, \vb  \rangle_2	 -\frac{1}{2}\|\vb\|_2 ^2 + \eps^T\vb - \frac{1}{2}(\vb - \mu)^T\Sigma^{-1}(\vb - \mu)} d v_b \\
+%	=& \frac{1}{Z_1} \int e^{ - \vb^T \vbeta 	 -\frac{1}{2}\vb^T\vb + \vb^T\eps - \frac{1}{2}\vb^T\Sigma^{-1}\vb + \vb^T\Sigma^{-1} \mu - \frac{1}{2}\mu^T\Sigma^{-1}\mu} d v_b \\
+%	=& \frac{1}{Z_1} e^{-\frac{1}{2}\mu^T \Sigma^{-1}\mu} \int e^{-\frac{1}{2}\vb^T(I + \Sigma^{-1})\vb + \vb^T(\eps + \Sigma^{-1}\mu -\vbeta)} d\vb \\
+%	=& \frac{1}{Z_1} e^{-\frac{1}{2}\mu^T \Sigma^{-1}\mu}  \int \exp\left\{-\frac{1}{2}\vb^T\underbrace{(I + \Sigma^{-1})}_{=:\postCov ^{-1}}\vb + \vb^T\underbrace{(\eps + \Sigma^{-1}\mu -\vbeta)}_{=: \postCov ^{-1} \mu_p}\right\} d\vb \\
+%	=& \frac{Z_2}{Z_1} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)} \int e^{-\frac{1}{2}(\vb - \mu_p)^T\postCov ^{-1}(\vb - \mu_p)}/Z_2  d\vb \\
+%	=& \frac{Z_2}{Z_1} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)} = \sqrt{\frac{|\postCov |}{|\Sigma|}}e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)} ,
+%\end{align*}
+%where $Z_1 = (2\pi)^{p/2}|\Sigma|^{1/2}$ and $Z_2 = (2\pi)^{p/2}|\postCov |^{1/2}$ are the appropriate normalisation constants for the Gaussian densities. Given this setup we have,
+%\begin{align*}
+%\int \Delta_{n, \beta, \beta^0, b, b^0}(Y) d\Pi(\beta, b) = 
+%\sqrt{\frac{|\postCov |}{|\Sigma|}} \int 	e^{-\frac{1}{2}\|X(\beta - \beta^0)\|_2^2 + \eps^TX(\beta - \beta^0)} e^{\frac{1}{2}\left(\mu_p^T\postCov ^{-1}\mu_p - \mu^T \Sigma^{-1}\mu\right)}  d\Pi(\beta)	
+%\end{align*}
+
+
+
+\end{document}

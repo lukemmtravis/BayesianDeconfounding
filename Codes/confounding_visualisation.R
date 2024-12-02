@@ -15,7 +15,6 @@ fits = list(
   gp = function(X, Y, xs) fit_gp(X, Y, xs, kernel=k),
   dgp = function(X, Y, xs) fit_dgp(X, Y, xs, kernel=k, dkernel=h, type='non-linear', sing_offset = 1e-6)
 )
-temp = sample_loss(100, 1, xs, data_fn, fits)
 fn_0 = function(x) sqrt(sum(x**2))^{0.5}
 matern32_kernel <- function(x1, x2, length_scale = 1.0, variance = 1.0) {
   # Compute the Euclidean distance between the two points
@@ -44,16 +43,14 @@ p = 1
 q = 2
 rho = 0.0
 
-# Make unconfounded xcomponents
+# Make unconfounded components
 E = make_design(n, p, rho=rho)
-# E = matrix(runif(n, min = -2, max = 2), nrow = n)
 e = rnorm(n, sd=1)
 
 # Make confounding components
 H = matrix(rnorm(n*q), nrow = n, ncol = q)
 Gamma = matrix(rnorm(q*p), nrow = q, ncol = p)
 delta = rnorm(q)
-# delta = 2 * rep(1, q)
 
 # Compute b for information, not actually used in the method 
 b = 1/(t(Gamma) %*% Gamma + 1) * t(Gamma) %*% delta
@@ -62,11 +59,6 @@ cat("n: ", n, "||b^0||_2: ", sum(b*b), '\n')
 # Compute observed data
 X = H %*% Gamma + E
 Y = apply(X, 1, fn_0) + H %*% delta + e
-# b = 1
-# X = H %*% Gamma + E
-# Y = apply(X, 1, fn_0) + X*b + e
-# Y = X*2 + X*b + e
-
 
 # Define prior covariance on b
 Sigma = diag(rep(1, p))
@@ -76,10 +68,7 @@ xs = matrix(seq(min(X), max(X), length.out = 200), nrow = 200)
 
 # Define GP fits
 gp = fit_gp(X, Y, xs, kernel=k)
-# dgp_01 = fit_dgp(X, Y, xs, kernel=k, dSigma=0.01*diag(rep(1, p)))
-# dgp_100 = fit_dgp(X, Y, xs, kernel=k, dSigma=100*diag(rep(1, p)))
 dgp = fit_dgp(X, Y, xs, kernel=k)
-# fits = list(gp = gp, dgp_01 = dgp_01, dgp_1 = dgp, dgp_100 = dgp_100)
 fits = list(GP = gp, 'Deconfounded GP' = dgp)
 
 # Format data
@@ -401,9 +390,6 @@ ggplot(train_dat)  + geom_line(aes(x=theta, y=Val, linetype=`True Stat.`)) +
   ylim(lims)
 }
 ggsave('../Figures/2d_embedding_example.pdf', width=10, height=6, units='in')
-
-
-
 
 # Non Linear Confounded Model
 {

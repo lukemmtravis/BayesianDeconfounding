@@ -21,6 +21,43 @@ make_data_LinConfounding = function(n, p, xs, q, fn_0){
   return(list(X = X, Y = Y, fn_xs = fn_xs))
 } 
 
+make_data_NonLinConfounding = function(n, p, xs, q, fn_0, phi_0){
+
+  
+  e = rnorm(n, sd=1)
+  
+  H = matrix(rnorm(n*q), nrow = n, ncol = q)
+  E = matrix(rnorm(n*p), nrow = n, ncol = p)
+  Gamma = matrix(rnorm(q*p), nrow = q, ncol = p)
+  
+  X = H %*% Gamma + E
+
+  Y = apply(X, 1, function(x) fn_0(x)) + apply(H, 1, function(h) phi_0(h)) + e
+
+  fn_xs = apply(xs, 1, function(x) fn_0(x))
+
+  return(list(X = X, Y = Y, fn_xs = fn_xs))
+} 
+
+make_data_DoubleConfounding = function(n, p, xs, q, fn_0, phi_0){
+
+  
+  e = rnorm(n, sd=1)
+  
+  H = matrix(rnorm(n*q), nrow = n, ncol = q)
+  E = matrix(rnorm(n*p), nrow = n, ncol = p)
+  Gamma = matrix(rnorm(q*p), nrow = q, ncol = p)
+  delta = rnorm(q)  
+
+  X = H %*% Gamma + E
+
+  Y = apply(X, 1, function(x) fn_0(x)) + H %*% delta + apply(H, 1, function(h) phi_0(h)) + e
+
+  fn_xs = apply(xs, 1, function(x) fn_0(x))
+
+  return(list(X = X, Y = Y, fn_xs = fn_xs))
+} 
+
 make_data_NonLinPerturbation = function(n, xs, fn_0, omega){
 
   gn_0 = function(x){
@@ -65,7 +102,28 @@ fit_dgp = function(X, Y, xs, kernel, dSigma=NA, dkernel=NA, type='linear', sing_
   if(type=='linear'){
     if(any(is.na(dSigma))){
       dSigma = diag(rep(1, p))
+      # cat('NA, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+    }else{
+      if(dSigma == 'trim'){
+        if(p == 1){
+          dSigma = matrix(1)
+        }else{
+          # print('Trimming properly')
+          svd_X = svd(X)
+          lambdas = svd_X$d**2
+          tau = median(svd_X$d)
+          phis = pmax((lambdas/tau**2 - 1)/lambdas, 0)
+          dSigma = svd_X$v %*% diag(phis) %*% t(svd_X$v)  
+          # cat('Trim, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+        }
+      }else if (dSigma == 'lava'){
+        dSigma = diag(rep(1, p))/n
+        # cat('Lava, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+      }else{
+        stop('dSigma must be one of {trim, lava}.')
+      }
     }
+
     mat_inv = solve(K_X_X + diag(rep(1, n)) + X %*% dSigma %*% t(X) )  
   }else if(type == 'non-linear'){
     H_X_X = apply(X, 1, function(x) apply(X, 1, function(y) dkernel(x, y))) + diag(sing_offset, n)
@@ -81,14 +139,67 @@ fit_dgp = function(X, Y, xs, kernel, dSigma=NA, dkernel=NA, type='linear', sing_
   return(list(est = post_mean, pointwise_var = diag(post_cov), cov = post_cov, fit_time=elapsed))
 }
 
+fit_dgpDouble = function(X, Y, xs, kernel, dSigma=NA, dkernel=NA, sing_offset=0){
+  n = dim(X)[1]
+  p = dim(X)[2]
+  t1 = Sys.time()
+  K_X_X = apply(X, 1, function(x) apply(X, 1, function(y) kernel(x, y)))
+  K_xs_X = apply(X, 1, function(x) apply(xs, 1, function(y) kernel(x, y)))
+  K_xs_xs = apply(xs, 1, function(x) apply(xs, 1, function(y) kernel(x, y)))
+  
+  if(any(is.na(dSigma))){
+    dSigma = diag(rep(1, p))
+    # cat('NA, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+  }else{
+    if(dSigma == 'trim'){
+      if(p == 1){
+        dSigma = matrix(1)
+      }else{
+        # print('Trimming properly')
+        svd_X = svd(X)
+        lambdas = svd_X$d**2
+        tau = median(svd_X$d)
+        phis = pmax((lambdas/tau**2 - 1)/lambdas, 0)
+        dSigma = svd_X$v %*% diag(phis) %*% t(svd_X$v)  
+        # cat('Trim, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+      }
+    }else if (dSigma == 'lava'){
+      dSigma = diag(rep(1, p))/n
+      # cat('Lava, dSigma[1, 1] = ', dSigma[1, 1], '\n')
+    }else{
+      stop('dSigma must be one of {trim, lava}.')
+    }
+  }
+
+  # mat_inv = solve(K_X_X + diag(rep(1, n)) +  )  
+
+  H_X_X = apply(X, 1, function(x) apply(X, 1, function(y) dkernel(x, y))) + diag(sing_offset, n)
+  mat_inv = solve(K_X_X + diag(rep(1, n)) + solve(H_X_X) + X %*% dSigma %*% t(X))  
+  
+  post_mean = K_xs_X %*% mat_inv %*% Y
+  post_cov = K_xs_xs - K_xs_X %*% mat_inv %*% t(K_xs_X)
+  t2 = Sys.time()
+  elapsed = difftime(t2, t1, units='secs')
+  return(list(est = post_mean, pointwise_var = diag(post_cov), cov = post_cov, fit_time=elapsed))
+}
+
 #### GP Kernels ####
 
 mat_kern = function(x, y, l = 1){
   return( exp (-sqrt(sum( (x - y)**2 ))))
 }
 
+se_kern = function(x, y, l = 1){
+  r = sqrt(sum( (x - y)**2 ))
+  return( exp (-r**2/l**2))
+}
+
 bm_kern = function(x, y, cn = 1){
   return( cn * min(x, y))
+}
+
+lin_kern = function(x, y, c = 1, sig1 = 1, sig2 = 1){
+  return( sig1**2 + sig2**2 * (x - c)*(y - c) ) 
 }
 
 
@@ -154,7 +265,7 @@ estimate_losses = function(n_replicates, n, p, xs, data_fn, fits,
 format_results = function(results, fit_names, round=3){
   means = lapply(results, function(res) res$mean)
   sds = lapply(results, function(res) res$sd)
-  losses = names(means$p1)
+  losses = names(means[[1]])
   formatted = list()
   for(loss in losses){
     mean_losses = do.call(cbind, lapply(means, function(x) x[[loss]]))

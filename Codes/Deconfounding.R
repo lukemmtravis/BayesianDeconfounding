@@ -150,20 +150,24 @@ make_data_CBM = function(n, p, s0, q, rho=0.0, sigma_E=2){
 ####
 
 #### Transforms ####
-trim_transform = function(X, tau=NA){
+trim_transform = function(X, tau_quantile=0.5){
   svd_X = svd(X)
   d = svd_X$d
-  if(is.na(tau)){
-    tau = median(d)
-  }
+  # if(is.na(tau_quantile)){
+  #   tau = median(d)
+  # }else{
+  #   tau = as.numeric(quantile(d, tau_quantile)
+  # }
+  tau = as.numeric(quantile(d, tau_quantile))
   d_tilde = pmin(d, tau)
   F_mat = svd_X$u %*% diag(d_tilde/d) %*% t(svd_X$u)
   return(F_mat)
 }
-puffer_transform = function(X){
+puffer_transform = function(X, tau_quantile=0.5){
   svd_X = svd(X)
   d = svd_X$d
-  d_tilde = rep(1, length(d))
+  tau = as.numeric(quantile(d, tau_quantile))
+  d_tilde = rep(tau, length(d))
   F_mat = svd_X$u %*% diag(d_tilde/d) %*% t(svd_X$u)
   return(F_mat)
 }
@@ -171,14 +175,14 @@ identity_transform = function(X){
   n = dim(X)[1]
   return(diag(n))
 }
-lava_transform = function(X, lambda=1, cbm_lambda=FALSE){
+lava_transform = function(X, lambda=1, cbm_lambda=FALSE, cbm_quantile=0.5){
   n = dim(X)[1]
   p = dim(X)[2]
   if(cbm_lambda){
     ds = svd(X)$d
-    lambda = (1/n)*median(ds)**2
+    lambda = (1/n)*as.numeric(quantile(ds, cbm_quantile))**2
   }else{
-    lambda=1
+    lambda=lambda
   }
   A = diag(n) - X %*% solve(t(X)%*%X + n*lambda*diag(p)) %*% t(X)
   svd_A = svd(A)
@@ -199,6 +203,21 @@ make_L = function(X, Sigma){
   svd_A = svd(A)
   L = svd_A$u %*% diag(sqrt(svd_A$d)) %*% t(svd_A$u)
   return(L)
+}
+
+sigma_est = function(X, Y, L){
+  X_tilde = L %*% X
+  Y_tilde = L %*% Y
+  
+  cv_fit = cv.glmnet(X_tilde, Y_tilde)
+  lambda_min = cv_fit$lambda.min
+  best_fit = glmnet(X_tilde, Y_tilde, lambda = lambda_min)
+  beta_hat = best_fit$beta 
+
+  RSS = sum( (Y_tilde - X_tilde %*% beta_hat)**2 )
+  sigma_est_sq = RSS/sum(svd(L)$d)
+
+  return(sqrt(sigma_est_sq))
 }
 ####
 
@@ -357,7 +376,7 @@ fit_cbm = function(X, Y, transform=trim_transform, oracle_lambda=FALSE){
   t2 = Sys.time()
   return(list(beta_hat = beta_hat, time = as.numeric(difftime(t2, t1, units = 'secs'))))
 }
-fit_vb_posterior = function(X, Y, transform=NULL, credible_intervals=FALSE, first_coord=FALSE){
+fit_vb_posterior = function(X, Y, transform=NULL, credible_intervals=TRUE, first_coord=FALSE){
   '
   Computes a variational approximation to the posterior, with L given by the
   transform. If no transform is given, no transform is applied (and) so this
@@ -834,7 +853,7 @@ estimate_losses = function(n_replicates, n, p, s0, q, signal_size=NA, fits='all'
   sds = lapply(bound, function(x) apply(x, 2, sd))
   return(list(mean = means, sd = sds))
 }
-sample_coverage = function(n, p, s0, q, signal_size=NA, AR=FALSE,
+sample_coverage_old = function(n, p, s0, q, signal_size=NA, AR=FALSE,
                        mcmc_burn=1000, mcmc_samples=5000, fits='all', rho=0.0, confounding_layers=1){
   dat = make_data(n, p, s0, q, signal_size=signal_size, rho=rho, AR=AR, confounding_layers=confounding_layers)
   X = dat$X
@@ -905,7 +924,35 @@ sample_coverage = function(n, p, s0, q, signal_size=NA, AR=FALSE,
               time = times, active_hit = active_hit, inactive_hit = inactive_hit,
               active_length = active_length, inactive_length = inactive_length))
 }
-estimate_coverage = function(n_replicates, n, p, s0, q, signal_size=NA, fits = 'all', rho=0, AR=FALSE, confounding_layers=1, mc.cores=1){
+
+sample_coverage = function(n, p, s0, q, fits, signal_size=NA, AR=FALSE,
+                       mcmc_burn=1000, mcmc_samples=5000, rho=0.0, confounding_layers=1, dataset='generated'){
+  dat = make_data(n, p, s0, q, signal_size=signal_size, rho=rho, AR=AR, confounding_layers=confounding_layers, dataset=dataset)
+  X = dat$X
+  Y = dat$Y
+  beta_0 = dat$beta_0
+  fits = lapply(fits, function(fit) fit(X, Y))
+  
+  # Compute Metrics
+  l2_loss = data.frame(lapply(fits, function(fit) l2_dist(fit$beta_hat, beta_0)))
+  l1_loss = data.frame(lapply(fits, function(fit) l1_dist(fit$beta_hat, beta_0)))
+  precision_score = data.frame(lapply(fits, function(fit) precision(fit$beta_hat, beta_0)))
+  recall_score = data.frame(lapply(fits, function(fit) recall(fit$beta_hat, beta_0)))
+  f1_score = data.frame(lapply(fits, function(fit) f1(fit$beta_hat, beta_0)))
+  times = data.frame(lapply(fits, function(fit) fit$time))
+  
+  active_hit = data.frame(lapply(fits, function(fit) active_hit(fit, beta_0)))
+  inactive_hit = data.frame(lapply(fits, function(fit) inactive_hit(fit, beta_0)))
+  active_length = data.frame(lapply(fits, function(fit) active_length(fit, beta_0)))
+  inactive_length = data.frame(lapply(fits, function(fit) inactive_length(fit, beta_0)))
+  
+  return(list(l2_loss = l2_loss, l1_loss = l1_loss,
+              precision = precision_score, recall = recall_score, f1 = f1_score,
+              time = times, active_hit = active_hit, inactive_hit = inactive_hit,
+              active_length = active_length, inactive_length = inactive_length))
+}
+
+estimate_coverage = function(n_replicates, n, p, s0, q, signal_size=NA, fits = 'all', rho=0, AR=FALSE, confounding_layers=1, mc.cores=1, dataset='generated'){
   cat('\n---------------------------',
     '\nRunning experiment with:',
     '\nn: ',n,
@@ -918,7 +965,7 @@ estimate_coverage = function(n_replicates, n, p, s0, q, signal_size=NA, fits = '
     stop('More than 6 cores, commment this check to proceed.')
   }
   replicated = mc_replicate(n_replicates,
-   sample_coverage(n, p, s0, q, signal_size = signal_size, fits = fits, rho = rho, AR=AR, confounding_layers=confounding_layers),
+   sample_coverage(n, p, s0, q, signal_size = signal_size, fits = fits, rho = rho, AR=AR, confounding_layers=confounding_layers, dataset=dataset),
    mc.cores=mc.cores
    )
   # replicated = pbreplicate(n_replicates, sample_coverage(n, p, s0, q, signal_size = signal_size, fits = fits, rho = rho))
@@ -1068,6 +1115,32 @@ format_results = function(res, round=3, methods=names(fits), k=1){
   colnames(formatted_results) = c('method', metrics)
   rownames(formatted_results) = c()
   return(formatted_results)
+}
+
+uq_format_results = function(res, round=3, include_sd=TRUE){
+  mean_df = res$mean
+  sd_df = res$sd
+  metrics = names(mean_df)
+  methods = names(res[[1]][[1]])
+  formatted_results = methods
+
+  for(i in c(1:length(metrics))){
+    metric = metrics[i]
+    if(include_sd){
+      # met_col = paste(format(round(mean_df[[metric]],round), round),
+      #                 format(round(sd_df[[metric]],round), round), sep = ' ± ')
+      met_col = paste(format(round(mean_df[[metric]], round), digits = round, nsmall = round),
+                      format(round(sd_df[[metric]], round), digits = round, nsmall = round), sep = ' ± ')
+    }else{
+      met_col = format(round(mean_df[[metric]], round), digits = round, nsmall = round)
+    }
+    formatted_results = cbind(formatted_results, met_col)
+  }
+  formatted_results = as.data.frame(t(formatted_results))
+  rownames(formatted_results) = c('method', metrics)
+  colnames(formatted_results) = c()
+
+  return(t(formatted_results))
 }
 
 format_riboflavin_results = function(results, round=3, methods=names(fits), k=1){
